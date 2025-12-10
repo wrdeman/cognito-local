@@ -12,6 +12,7 @@ import {
   NotAuthorizedError,
 } from "../errors";
 import type { Triggers, UserPoolService } from "../services";
+import { InMemorySessionStore } from "../services/sessionStore";
 import type { TokenGenerator } from "../services/tokenGenerator";
 import {
   RespondToAuthChallenge,
@@ -25,6 +26,7 @@ describe("RespondToAuthChallenge target", () => {
   let mockTokenGenerator: MockedObject<TokenGenerator>;
   let mockTriggers: MockedObject<Triggers>;
   let mockUserPoolService: MockedObject<UserPoolService>;
+  let sessionStore: InMemorySessionStore;
   let clock: ClockFake;
   const userPoolClient = TDB.appClient();
 
@@ -35,6 +37,7 @@ describe("RespondToAuthChallenge target", () => {
     mockUserPoolService = newMockUserPoolService({
       Id: userPoolClient.UserPoolId,
     });
+    sessionStore = new InMemorySessionStore();
 
     const mockCognitoService = newMockCognitoService(mockUserPoolService);
     mockCognitoService.getAppClient.mockResolvedValue(userPoolClient);
@@ -42,6 +45,7 @@ describe("RespondToAuthChallenge target", () => {
     respondToAuthChallenge = RespondToAuthChallenge({
       clock,
       cognito: mockCognitoService,
+      sessionStore,
       tokenGenerator: mockTokenGenerator,
       triggers: mockTriggers,
     });

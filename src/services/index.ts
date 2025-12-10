@@ -11,6 +11,12 @@ export { Lambda, LambdaService } from "./lambda";
 export { Messages, MessagesService } from "./messages";
 export { Triggers, TriggersService } from "./triggers";
 export { UserPoolService, UserPoolServiceImpl } from "./userPoolService";
+export {
+  InMemorySessionStore,
+  type SessionStore,
+  decodeSessionToken,
+  encodeSessionToken,
+} from "./sessionStore";
 
 export interface Services {
   clock: Clock;
@@ -18,6 +24,7 @@ export interface Services {
   config: Config;
   messages: Messages;
   otp: () => string;
+  sessionStore: SessionStore;
   tokenGenerator: TokenGenerator;
   triggers: Triggers;
 }

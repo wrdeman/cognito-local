@@ -22,6 +22,7 @@ import {
   PasswordResetRequiredError,
 } from "../errors";
 import type { Messages, Triggers, UserPoolService } from "../services";
+import { InMemorySessionStore } from "../services/sessionStore";
 import type { TokenGenerator } from "../services/tokenGenerator";
 import { attributesToRecord, type User } from "../services/userPoolService";
 import { InitiateAuth, type InitiateAuthTarget } from "./initiateAuth";
@@ -33,6 +34,7 @@ describe("InitiateAuth target", () => {
   let mockOtp: Mock<() => string>;
   let mockTriggers: MockedObject<Triggers>;
   let mockTokenGenerator: MockedObject<TokenGenerator>;
+  let sessionStore: InMemorySessionStore;
   const userPoolClient = TDB.appClient();
 
   beforeEach(() => {
@@ -43,6 +45,7 @@ describe("InitiateAuth target", () => {
     mockOtp = vi.fn().mockReturnValue("123456");
     mockTriggers = newMockTriggers();
     mockTokenGenerator = newMockTokenGenerator();
+    sessionStore = new InMemorySessionStore();
 
     const mockCognitoService = newMockCognitoService(mockUserPoolService);
     mockCognitoService.getAppClient.mockResolvedValue(userPoolClient);
@@ -51,6 +54,7 @@ describe("InitiateAuth target", () => {
       cognito: mockCognitoService,
       messages: mockMessages,
       otp: mockOtp,
+      sessionStore,
       triggers: mockTriggers,
       tokenGenerator: mockTokenGenerator,
     });

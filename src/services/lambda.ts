@@ -20,6 +20,7 @@ import {
   UserLambdaValidationError,
 } from "../errors";
 import type { Context } from "./context";
+import path from "node:path";
 
 type CognitoUserPoolEvent =
   | CreateAuthChallengeTriggerEvent
@@ -137,6 +138,39 @@ interface PostConfirmationEvent
   clientId: string | null;
 }
 
+interface DefineAuthChallengeEvent extends EventCommonParameters {
+  clientMetadata: Record<string, string> | undefined;
+  triggerSource: "DefineAuthChallenge_Authentication";
+  session: readonly {
+    challengeName: string;
+    challengeResult: boolean;
+    challengeMetadata?: string;
+  }[];
+}
+
+interface CreateAuthChallengeEvent extends EventCommonParameters {
+  challengeName: string;
+  clientMetadata: Record<string, string> | undefined;
+  triggerSource: "CreateAuthChallenge_Authentication";
+  session: readonly {
+    challengeName: string;
+    challengeResult: boolean;
+    challengeMetadata?: string;
+  }[];
+}
+
+interface VerifyAuthChallengeResponseEvent extends EventCommonParameters {
+  challengeAnswer: string;
+  clientMetadata: Record<string, string> | undefined;
+  privateChallengeParameters: Record<string, string>;
+  triggerSource: "VerifyAuthChallengeResponse_Authentication";
+  session: readonly {
+    challengeName: string;
+    challengeResult: boolean;
+    challengeMetadata?: string;
+  }[];
+}
+
 export interface FunctionConfig {
   CustomMessage?: string;
   PostAuthentication?: string;
@@ -145,6 +179,9 @@ export interface FunctionConfig {
   PreTokenGeneration?: string;
   UserMigration?: string;
   CustomEmailSender?: string;
+  DefineAuthChallenge?: string;
+  CreateAuthChallenge?: string;
+  VerifyAuthChallengeResponse?: string;
 }
 
 export type CustomMessageTriggerResponse =
@@ -163,6 +200,16 @@ export type CustomEmailSenderTriggerResponse =
 
 export interface Lambda {
   enabled(lambda: keyof FunctionConfig): boolean;
+  invoke(
+    ctx: Context,
+    lambda: "DefineAuthChallenge",
+    event: DefineAuthChallengeEvent,
+  ): Promise<DefineAuthChallengeTriggerResponse>;
+  invoke(
+    ctx: Context,
+    lambda: "CreateAuthChallenge",
+    event: CreateAuthChallengeEvent,
+  ): Promise<CreateAuthChallengeTriggerResponse>;
   invoke(
     ctx: Context,
     lambda: "CustomMessage",
@@ -198,6 +245,11 @@ export interface Lambda {
     lambda: "CustomEmailSender",
     event: CustomEmailSenderEvent,
   ): Promise<CustomEmailSenderTriggerResponse>;
+  invoke(
+    ctx: Context,
+    lambda: "VerifyAuthChallengeResponse",
+    event: VerifyAuthChallengeResponseEvent,
+  ): Promise<VerifyAuthChallengeResponseTriggerResponse>;
 }
 
 export class LambdaService implements Lambda {
@@ -217,13 +269,16 @@ export class LambdaService implements Lambda {
     ctx: Context,
     trigger: keyof FunctionConfig,
     event:
+      | CreateAuthChallengeEvent
+      | DefineAuthChallengeEvent
       | CustomMessageEvent
       | CustomEmailSenderEvent
       | PostAuthenticationEvent
       | PostConfirmationEvent
       | PreSignUpEvent
       | PreTokenGenerationEvent
-      | UserMigrationEvent,
+      | UserMigrationEvent
+      | VerifyAuthChallengeResponseEvent,
   ) {
     const functionName = this.config[trigger];
     if (!functionName) {
@@ -231,6 +286,10 @@ export class LambdaService implements Lambda {
     }
 
     const lambdaEvent = this.createLambdaEvent(event);
+
+    if (functionName.startsWith(".") || path.isAbsolute(functionName)) {
+      return this.invokeLocal(functionName, lambdaEvent);
+    }
 
     ctx.logger.debug(
       {
@@ -282,15 +341,49 @@ export class LambdaService implements Lambda {
     }
   }
 
+  private async invokeLocal(
+    functionName: string,
+    lambdaEvent: CognitoUserPoolEvent,
+  ) {
+    const localPath = path.isAbsolute(functionName)
+      ? functionName
+      : path.resolve(functionName);
+    const handlerModule = await import(localPath);
+    const handler =
+      (handlerModule as { default?: unknown }).default ??
+      (handlerModule as { handler?: unknown }).handler ??
+      handlerModule;
+
+    if (typeof handler !== "function") {
+      throw new InvalidLambdaResponseError();
+    }
+
+    try {
+      const result = await handler(lambdaEvent);
+      const payload = (result ?? lambdaEvent) as { response?: unknown };
+
+      if (!payload || typeof payload !== "object" || payload.response === undefined) {
+        throw new InvalidLambdaResponseError();
+      }
+
+      return payload.response;
+    } catch (err) {
+      throw new UnexpectedLambdaExceptionError();
+    }
+  }
+
   private createLambdaEvent(
     event:
+      | CreateAuthChallengeEvent
+      | DefineAuthChallengeEvent
       | CustomMessageEvent
       | CustomEmailSenderEvent
       | PostAuthenticationEvent
       | PostConfirmationEvent
       | PreSignUpEvent
       | PreTokenGenerationEvent
-      | UserMigrationEvent,
+      | UserMigrationEvent
+      | VerifyAuthChallengeResponseEvent,
   ): CognitoUserPoolEvent {
     const version = "0"; // TODO: how do we know what this is?
     const callerContext = {
@@ -302,6 +395,69 @@ export class LambdaService implements Lambda {
     const region = "local"; // TODO: pull from above,
 
     switch (event.triggerSource) {
+      case "DefineAuthChallenge_Authentication": {
+        return {
+          version,
+          callerContext,
+          region,
+          userPoolId: event.userPoolId,
+          triggerSource: event.triggerSource,
+          userName: event.username,
+          request: {
+            userAttributes: event.userAttributes,
+            session: event.session,
+            clientMetadata: event.clientMetadata,
+          },
+          response: {
+            issueTokens: false,
+            failAuthentication: false,
+            challengeName: null,
+          },
+        };
+      }
+
+      case "CreateAuthChallenge_Authentication": {
+        return {
+          version,
+          callerContext,
+          region,
+          userPoolId: event.userPoolId,
+          triggerSource: event.triggerSource,
+          userName: event.username,
+          request: {
+            userAttributes: event.userAttributes,
+            challengeName: event.challengeName,
+            session: event.session,
+            clientMetadata: event.clientMetadata,
+          },
+          response: {
+            publicChallengeParameters: {},
+            privateChallengeParameters: {},
+            challengeMetadata: "",
+          },
+        };
+      }
+
+      case "VerifyAuthChallengeResponse_Authentication": {
+        return {
+          version,
+          callerContext,
+          region,
+          userPoolId: event.userPoolId,
+          triggerSource: event.triggerSource,
+          userName: event.username,
+          request: {
+            userAttributes: event.userAttributes,
+            privateChallengeParameters: event.privateChallengeParameters,
+            challengeAnswer: event.challengeAnswer,
+            clientMetadata: event.clientMetadata,
+            session: event.session,
+          },
+          response: {
+            answerCorrect: false,
+          },
+        };
+      }
       case "PostAuthentication_Authentication": {
         return {
           version,

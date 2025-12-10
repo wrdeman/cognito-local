@@ -4,6 +4,7 @@ import {
   DateClock,
   LambdaService,
   MessagesService,
+  InMemorySessionStore,
   TriggersService,
 } from "../services";
 import { CognitoServiceFactoryImpl } from "../services/cognitoService";
@@ -68,6 +69,7 @@ export const createDefaultServer = async (
         new MessageDeliveryService(new ConsoleMessageSender()),
       ),
       otp,
+      sessionStore: new InMemorySessionStore(),
       tokenGenerator: new JwtTokenGenerator(
         clock,
         triggers,
