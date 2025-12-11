@@ -20,6 +20,7 @@ import {
   UserLambdaValidationError,
 } from "../errors";
 import type { Context } from "./context";
+import type { ChallengeResultItem } from "./sessionStore";
 import path from "node:path";
 
 type CognitoUserPoolEvent =
@@ -34,6 +35,8 @@ type CognitoUserPoolEvent =
   | PreTokenGenerationTriggerEvent
   | UserMigrationTriggerEvent
   | VerifyAuthChallengeResponseTriggerEvent;
+
+type CognitoChallengeSession = ChallengeResultItem[];
 
 interface EventCommonParameters {
   clientId: string;
@@ -141,22 +144,14 @@ interface PostConfirmationEvent
 interface DefineAuthChallengeEvent extends EventCommonParameters {
   clientMetadata: Record<string, string> | undefined;
   triggerSource: "DefineAuthChallenge_Authentication";
-  session: {
-    challengeName: string;
-    challengeResult: boolean;
-    challengeMetadata?: string;
-  }[];
+  session: CognitoChallengeSession;
 }
 
 interface CreateAuthChallengeEvent extends EventCommonParameters {
   challengeName: string;
   clientMetadata: Record<string, string> | undefined;
   triggerSource: "CreateAuthChallenge_Authentication";
-  session: {
-    challengeName: string;
-    challengeResult: boolean;
-    challengeMetadata?: string;
-  }[];
+  session: CognitoChallengeSession;
 }
 
 interface VerifyAuthChallengeResponseEvent extends EventCommonParameters {
@@ -164,11 +159,6 @@ interface VerifyAuthChallengeResponseEvent extends EventCommonParameters {
   clientMetadata: Record<string, string> | undefined;
   privateChallengeParameters: Record<string, string>;
   triggerSource: "VerifyAuthChallengeResponse_Authentication";
-  session: {
-    challengeName: string;
-    challengeResult: boolean;
-    challengeMetadata?: string;
-  }[];
 }
 
 export interface FunctionConfig {
@@ -197,12 +187,19 @@ export type PostConfirmationTriggerResponse =
   PostConfirmationTriggerEvent["response"];
 export type CustomEmailSenderTriggerResponse =
   CustomEmailSenderTriggerEvent["response"];
-export type DefineAuthChallengeTriggerResponse =
-  DefineAuthChallengeTriggerEvent["response"];
-export type CreateAuthChallengeTriggerResponse =
-  CreateAuthChallengeTriggerEvent["response"];
-export type VerifyAuthChallengeResponseTriggerResponse =
-  VerifyAuthChallengeResponseTriggerEvent["response"];
+export type DefineAuthChallengeTriggerResponse = {
+  challengeName: string | null;
+  issueTokens: boolean;
+  failAuthentication: boolean;
+};
+export type CreateAuthChallengeTriggerResponse = {
+  publicChallengeParameters?: Record<string, string>;
+  privateChallengeParameters?: Record<string, string>;
+  challengeMetadata?: string;
+};
+export type VerifyAuthChallengeResponseTriggerResponse = {
+  answerCorrect?: boolean;
+};
 
 export interface Lambda {
   enabled(lambda: keyof FunctionConfig): boolean;
@@ -256,6 +253,7 @@ export interface Lambda {
     lambda: "VerifyAuthChallengeResponse",
     event: VerifyAuthChallengeResponseEvent,
   ): Promise<VerifyAuthChallengeResponseTriggerResponse>;
+  invoke(ctx: Context, lambda: keyof FunctionConfig, event: unknown): Promise<unknown>;
 }
 
 export class LambdaService implements Lambda {
@@ -417,9 +415,9 @@ export class LambdaService implements Lambda {
           response: {
             issueTokens: false,
             failAuthentication: false,
-            challengeName: null,
+            challengeName: null as unknown as string,
           },
-        };
+        } as DefineAuthChallengeTriggerEvent;
       }
 
       case "CreateAuthChallenge_Authentication": {
@@ -457,12 +455,11 @@ export class LambdaService implements Lambda {
             privateChallengeParameters: event.privateChallengeParameters,
             challengeAnswer: event.challengeAnswer,
             clientMetadata: event.clientMetadata,
-            session: event.session,
           },
           response: {
             answerCorrect: false,
           },
-        };
+        } as VerifyAuthChallengeResponseTriggerEvent;
       }
       case "PostAuthentication_Authentication": {
         return {

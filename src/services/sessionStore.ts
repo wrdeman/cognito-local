@@ -1,13 +1,13 @@
 import { v4 as uuid } from "uuid";
 
 export interface ChallengeResultItem {
-  challengeName: string;
+  challengeName: "CUSTOM_CHALLENGE";
   challengeResult: boolean;
   challengeMetadata?: string;
 }
 
 export interface ChallengeState {
-  challengeName: string;
+  challengeName: "CUSTOM_CHALLENGE";
   privateChallengeParameters: Record<string, string>;
   publicChallengeParameters: Record<string, string>;
   expectedAnswer: string | null;

@@ -1,5 +1,6 @@
 import type { AttributeListType } from "aws-sdk/clients/cognitoidentityserviceprovider";
 import type { Lambda, VerifyAuthChallengeResponseTriggerResponse } from "../lambda";
+import type { ChallengeResultItem } from "../sessionStore";
 import { attributesToRecord } from "../userPoolService";
 import type { Trigger } from "./trigger";
 
@@ -9,11 +10,7 @@ export type VerifyAuthChallengeResponseTrigger = Trigger<
     clientId: string;
     clientMetadata: Record<string, string> | undefined;
     privateChallengeParameters: Record<string, string>;
-    session: {
-      challengeName: string;
-      challengeResult: boolean;
-      challengeMetadata?: string;
-    }[];
+    session: ChallengeResultItem[];
     userAttributes: AttributeListType;
     username: string;
     userPoolId: string;
@@ -44,7 +41,6 @@ export const VerifyAuthChallengeResponse = ({
       clientId,
       clientMetadata,
       privateChallengeParameters,
-      session,
       triggerSource: "VerifyAuthChallengeResponse_Authentication",
       userAttributes: attributesToRecord(userAttributes),
       username,

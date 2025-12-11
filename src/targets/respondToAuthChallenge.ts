@@ -141,8 +141,9 @@ const customAuthChallenge = async (
     };
   }
 
-  const challengeName =
-    defineResponse.challengeName ?? ("CUSTOM_CHALLENGE" as const);
+  const challengeName: "CUSTOM_CHALLENGE" = (
+    defineResponse.challengeName ?? "CUSTOM_CHALLENGE"
+  ) as "CUSTOM_CHALLENGE";
 
   const createResponse = await services.triggers.createAuthChallenge(ctx, {
     challengeName,
