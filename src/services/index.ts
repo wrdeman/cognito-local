@@ -4,6 +4,7 @@ import type { CognitoService } from "./cognitoService";
 import type { Messages } from "./messages";
 import type { TokenGenerator } from "./tokenGenerator";
 import type { Triggers } from "./triggers";
+import type { SessionStore } from "./sessionStore";
 
 export { Clock, DateClock } from "./clock";
 export { CognitoService, CognitoServiceImpl } from "./cognitoService";

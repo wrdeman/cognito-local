@@ -9,7 +9,7 @@ export type VerifyAuthChallengeResponseTrigger = Trigger<
     clientId: string;
     clientMetadata: Record<string, string> | undefined;
     privateChallengeParameters: Record<string, string>;
-    session: readonly {
+    session: {
       challengeName: string;
       challengeResult: boolean;
       challengeMetadata?: string;

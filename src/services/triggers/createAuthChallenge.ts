@@ -8,7 +8,7 @@ export type CreateAuthChallengeTrigger = Trigger<
     challengeName: string;
     clientId: string;
     clientMetadata: Record<string, string> | undefined;
-    session: readonly {
+    session: {
       challengeName: string;
       challengeResult: boolean;
       challengeMetadata?: string;

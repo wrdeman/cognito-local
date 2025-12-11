@@ -141,7 +141,7 @@ interface PostConfirmationEvent
 interface DefineAuthChallengeEvent extends EventCommonParameters {
   clientMetadata: Record<string, string> | undefined;
   triggerSource: "DefineAuthChallenge_Authentication";
-  session: readonly {
+  session: {
     challengeName: string;
     challengeResult: boolean;
     challengeMetadata?: string;
@@ -152,7 +152,7 @@ interface CreateAuthChallengeEvent extends EventCommonParameters {
   challengeName: string;
   clientMetadata: Record<string, string> | undefined;
   triggerSource: "CreateAuthChallenge_Authentication";
-  session: readonly {
+  session: {
     challengeName: string;
     challengeResult: boolean;
     challengeMetadata?: string;
@@ -164,7 +164,7 @@ interface VerifyAuthChallengeResponseEvent extends EventCommonParameters {
   clientMetadata: Record<string, string> | undefined;
   privateChallengeParameters: Record<string, string>;
   triggerSource: "VerifyAuthChallengeResponse_Authentication";
-  session: readonly {
+  session: {
     challengeName: string;
     challengeResult: boolean;
     challengeMetadata?: string;
@@ -197,6 +197,12 @@ export type PostConfirmationTriggerResponse =
   PostConfirmationTriggerEvent["response"];
 export type CustomEmailSenderTriggerResponse =
   CustomEmailSenderTriggerEvent["response"];
+export type DefineAuthChallengeTriggerResponse =
+  DefineAuthChallengeTriggerEvent["response"];
+export type CreateAuthChallengeTriggerResponse =
+  CreateAuthChallengeTriggerEvent["response"];
+export type VerifyAuthChallengeResponseTriggerResponse =
+  VerifyAuthChallengeResponseTriggerEvent["response"];
 
 export interface Lambda {
   enabled(lambda: keyof FunctionConfig): boolean;
@@ -348,7 +354,7 @@ export class LambdaService implements Lambda {
     const localPath = path.isAbsolute(functionName)
       ? functionName
       : path.resolve(functionName);
-    const handlerModule = await import(localPath);
+    const handlerModule = require(localPath);
     const handler =
       (handlerModule as { default?: unknown }).default ??
       (handlerModule as { handler?: unknown }).handler ??
