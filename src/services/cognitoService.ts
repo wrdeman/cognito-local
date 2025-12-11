@@ -392,8 +392,7 @@ export class CognitoServiceImpl implements CognitoService {
       return userPool;
     } catch (error) {
       if (process.env.COGNITO_LOCAL === "true") {
-        const pools = await this.listUserPools(ctx);
-        const fallbackPool = pools[0];
+        const fallbackPool = this.userPools?.[0];
         if (fallbackPool) {
           ctx.logger.info(
             {
