@@ -23,18 +23,21 @@ export const ConfirmSignUp =
     triggers,
   }: Pick<Services, "cognito" | "clock" | "triggers">): ConfirmSignUpTarget =>
   async (ctx, req) => {
+    const isLocal = process.env.COGNITO_LOCAL === "true";
     const userPool = await cognito.getUserPoolForClientId(ctx, req.ClientId);
     const user = await userPool.getUserByUsername(ctx, req.Username);
     if (!user) {
       throw new NotAuthorizedError();
     }
 
-    if (!user.ConfirmationCode) {
-      throw new ExpiredCodeError();
-    }
+    if (!isLocal) {
+      if (!user.ConfirmationCode) {
+        throw new ExpiredCodeError();
+      }
 
-    if (user.ConfirmationCode !== req.ConfirmationCode) {
-      throw new CodeMismatchError();
+      if (user.ConfirmationCode !== req.ConfirmationCode) {
+        throw new CodeMismatchError();
+      }
     }
 
     const updatedUser = {

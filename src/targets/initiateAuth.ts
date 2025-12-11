@@ -276,7 +276,15 @@ const customAuthFlow = async (
   }
 
   if (user.UserStatus === "UNCONFIRMED") {
-    throw new UserNotConfirmedException();
+    if (process.env.COGNITO_LOCAL === "true") {
+      await userPool.saveUser(ctx, {
+        ...user,
+        ConfirmationCode: undefined,
+        UserStatus: "CONFIRMED",
+      });
+    } else {
+      throw new UserNotConfirmedException();
+    }
   }
 
   if (
