@@ -108,6 +108,43 @@ describe("InitiateAuth target", () => {
       ).rejects.toBeInstanceOf(PasswordResetRequiredError);
     });
 
+    it("does not change USER_PASSWORD_AUTH alias handling", async () => {
+      const emailAlias = "alias@example.com";
+      const user = TDB.user({
+        Attributes: [
+          { Name: "email", Value: emailAlias },
+          { Name: "sub", Value: "sub" },
+        ],
+        Password: "Password123!",
+        Username: "canonical-username",
+      });
+
+      mockUserPoolService.options.UsernameAttributes = ["email"];
+      mockUserPoolService.getUserByUsername.mockResolvedValue(user);
+      mockUserPoolService.listUserGroupMembership.mockResolvedValue([]);
+      mockTokenGenerator.generate.mockResolvedValue({
+        AccessToken: "access",
+        IdToken: "id",
+        RefreshToken: "refresh",
+      });
+
+      const response = await initiateAuth(TestContext, {
+        ClientId: userPoolClient.ClientId,
+        AuthFlow: "USER_PASSWORD_AUTH",
+        AuthParameters: {
+          USERNAME: emailAlias,
+          PASSWORD: user.Password!,
+        },
+      });
+
+      expect(response.AuthenticationResult?.AccessToken).toEqual("access");
+      expect(mockUserPoolService.listUsers).not.toHaveBeenCalled();
+      expect(mockUserPoolService.getUserByUsername).toHaveBeenCalledWith(
+        TestContext,
+        emailAlias,
+      );
+    });
+
     describe("when user doesn't exist", () => {
       describe("when User Migration trigger is enabled", () => {
         it("invokes the User Migration trigger and continues", async () => {

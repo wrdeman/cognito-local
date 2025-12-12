@@ -20,6 +20,7 @@ import {
   encodeSessionToken,
 } from "../services/sessionStore";
 import {
+  attributesIncludeMatch,
   attributesToRecord,
   attributeValue,
   type MFAOption,
@@ -261,7 +262,28 @@ const customAuthFlow = async (
     throw new InvalidParameterError("AuthParameters USERNAME is required");
   }
 
-  const user = await userPool.getUserByUsername(ctx, req.AuthParameters.USERNAME);
+  const authParameters = { ...req.AuthParameters };
+
+  // AWS resolves email aliases to the stored username when UsernameAttributes
+  // include "email". This mirrors Cognito so downstream challenges operate on
+  // the canonical username even if an email alias was provided.
+  if (
+    authParameters.USERNAME.includes("@") &&
+    userPool.options.UsernameAttributes?.includes("email")
+  ) {
+    const users = await userPool.listUsers(ctx);
+    const userByEmail = users.find((candidate) =>
+      attributesIncludeMatch("email", authParameters.USERNAME, candidate.Attributes),
+    );
+
+    if (!userByEmail) {
+      throw new NotAuthorizedError();
+    }
+
+    authParameters.USERNAME = userByEmail.Username;
+  }
+
+  const user = await userPool.getUserByUsername(ctx, authParameters.USERNAME);
 
   if (!user) {
     throw new NotAuthorizedError();

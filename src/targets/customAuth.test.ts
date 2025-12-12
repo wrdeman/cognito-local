@@ -79,6 +79,106 @@ describe("CUSTOM_AUTH flow", () => {
       ].includes(trigger as any),
     );
 
+  it("resolves email aliases to the stored username", async () => {
+    enableCustomTriggers();
+
+    const emailAlias = "alias@example.com";
+    const userWithAlias = TDB.user({
+      Attributes: [
+        { Name: "email", Value: emailAlias },
+        { Name: "sub", Value: "sub" },
+      ],
+      Username: "canonical-username",
+    });
+
+    mockUserPoolService.options.UsernameAttributes = ["email"];
+    mockUserPoolService.listUsers.mockResolvedValue([userWithAlias]);
+    mockUserPoolService.getUserByUsername.mockResolvedValue(userWithAlias);
+
+    mockTriggers.defineAuthChallenge.mockResolvedValueOnce({
+      challengeName: null,
+      issueTokens: true,
+      failAuthentication: false,
+    });
+
+    const initiateResponse = await initiateAuth(TestContext, {
+      AuthFlow: "CUSTOM_AUTH",
+      ClientId: userPoolClient.ClientId,
+      AuthParameters: {
+        USERNAME: emailAlias,
+      },
+    });
+
+    expect(initiateResponse.AuthenticationResult?.AccessToken).toEqual("access");
+    expect(mockUserPoolService.listUsers).toHaveBeenCalled();
+    expect(mockUserPoolService.getUserByUsername).toHaveBeenCalledWith(
+      TestContext,
+      userWithAlias.Username,
+    );
+  });
+
+  it("rejects CUSTOM_AUTH when the email alias is unknown", async () => {
+    mockUserPoolService.options.UsernameAttributes = ["email"];
+    mockUserPoolService.listUsers.mockResolvedValue([]);
+
+    await expect(
+      initiateAuth(TestContext, {
+        AuthFlow: "CUSTOM_AUTH",
+        ClientId: userPoolClient.ClientId,
+        AuthParameters: {
+          USERNAME: "missing@example.com",
+        },
+      }),
+    ).rejects.toBeInstanceOf(NotAuthorizedError);
+
+    expect(mockUserPoolService.getUserByUsername).not.toHaveBeenCalled();
+  });
+
+  it("leaves non-email usernames unchanged", async () => {
+    enableCustomTriggers();
+
+    const nonEmailUser = TDB.user({ Username: "plainusername" });
+
+    mockUserPoolService.getUserByUsername.mockResolvedValue(nonEmailUser);
+
+    mockTriggers.defineAuthChallenge.mockResolvedValueOnce({
+      challengeName: "CUSTOM_CHALLENGE",
+      issueTokens: false,
+      failAuthentication: false,
+    });
+
+    mockTriggers.createAuthChallenge.mockResolvedValueOnce({
+      publicChallengeParameters: { delivery: "email" },
+      privateChallengeParameters: { expectedAnswer: "123456" },
+      challengeMetadata: "metadata",
+    });
+
+    mockTriggers.verifyAuthChallengeResponse.mockResolvedValueOnce({
+      answerCorrect: true,
+    });
+
+    mockTriggers.defineAuthChallenge.mockResolvedValueOnce({
+      challengeName: null,
+      issueTokens: true,
+      failAuthentication: false,
+    });
+
+    const initiateResponse = await initiateAuth(TestContext, {
+      AuthFlow: "CUSTOM_AUTH",
+      ClientId: userPoolClient.ClientId,
+      AuthParameters: {
+        USERNAME: nonEmailUser.Username,
+      },
+    });
+
+    expect(initiateResponse.ChallengeName).toEqual("CUSTOM_CHALLENGE");
+    expect(mockUserPoolService.listUsers).not.toHaveBeenCalled();
+    expect(mockUserPoolService.getUserByUsername).toHaveBeenCalledWith(
+      TestContext,
+      nonEmailUser.Username,
+    );
+  });
+
   it("completes a single round custom challenge", async () => {
     enableCustomTriggers();
 
