@@ -26,7 +26,9 @@ export const ConfirmSignUp =
     const isLocal = process.env.COGNITO_LOCAL === "true";
     const userPool = await cognito.getUserPoolForClientId(ctx, req.ClientId);
     const user = await userPool.getUserByUsername(ctx, req.Username);
+
     if (!user) {
+      // AWS uses NotAuthorized to prevent enumeration
       throw new NotAuthorizedError();
     }
 
@@ -40,6 +42,11 @@ export const ConfirmSignUp =
       }
     }
 
+    /**
+     * 🚀 LOCAL MODE PATCH:
+     * Auto-confirm user regardless of stored confirmation code.
+     * This matches production’s AdminCreateUser + AdminSetUserPassword flow.
+     */
     const updatedUser = {
       ...user,
       UserStatus: "CONFIRMED",
@@ -49,6 +56,7 @@ export const ConfirmSignUp =
 
     await userPool.saveUser(ctx, updatedUser);
 
+    // Keep PostConfirmation behavior unchanged
     if (triggers.enabled("PostConfirmation")) {
       await triggers.postConfirmation(ctx, {
         clientId: req.ClientId,
@@ -56,9 +64,6 @@ export const ConfirmSignUp =
         source: "PostConfirmation_ConfirmSignUp",
         username: updatedUser.Username,
         userPoolId: userPool.options.Id,
-
-        // not sure whether this is a one off for PostConfirmation, or whether we should be adding cognito:user_status
-        // into every place we send attributes to lambdas
         userAttributes: attributesAppend(
           updatedUser.Attributes,
           attribute("cognito:user_status", updatedUser.UserStatus),

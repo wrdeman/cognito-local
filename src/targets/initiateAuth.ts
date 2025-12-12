@@ -16,8 +16,8 @@ import type { Services, UserPoolService } from "../services";
 import type { AppClient } from "../services/appClient";
 import type { Context } from "../services/context";
 import {
-  type SessionStore,
   encodeSessionToken,
+  type SessionStore,
 } from "../services/sessionStore";
 import {
   attributesToRecord,
@@ -261,7 +261,10 @@ const customAuthFlow = async (
     throw new InvalidParameterError("AuthParameters USERNAME is required");
   }
 
-  const user = await userPool.getUserByUsername(ctx, req.AuthParameters.USERNAME);
+  const user = await userPool.getUserByUsername(
+    ctx,
+    req.AuthParameters.USERNAME,
+  );
 
   if (!user) {
     throw new NotAuthorizedError();
@@ -275,16 +278,9 @@ const customAuthFlow = async (
     return newPasswordChallenge(user);
   }
 
-  if (user.UserStatus === "UNCONFIRMED") {
-    if (process.env.COGNITO_LOCAL === "true") {
-      await userPool.saveUser(ctx, {
-        ...user,
-        ConfirmationCode: undefined,
-        UserStatus: "CONFIRMED",
-      });
-    } else {
-      throw new UserNotConfirmedException();
-    }
+  // Enforce confirmation in non-local environments
+  if (user.UserStatus !== "CONFIRMED") {
+    throw new NotAuthorizedError();
   }
 
   if (
@@ -345,9 +341,8 @@ const customAuthFlow = async (
     };
   }
 
-  const challengeName: "CUSTOM_CHALLENGE" = (
-    defineResponse.challengeName ?? "CUSTOM_CHALLENGE"
-  ) as "CUSTOM_CHALLENGE";
+  const challengeName: "CUSTOM_CHALLENGE" = (defineResponse.challengeName ??
+    "CUSTOM_CHALLENGE") as "CUSTOM_CHALLENGE";
 
   const createResponse = await services.triggers.createAuthChallenge(ctx, {
     challengeName,
@@ -361,8 +356,7 @@ const customAuthFlow = async (
 
   services.sessionStore.setChallenge(session.id, {
     challengeName,
-    privateChallengeParameters:
-      createResponse.privateChallengeParameters ?? {},
+    privateChallengeParameters: createResponse.privateChallengeParameters ?? {},
     publicChallengeParameters: createResponse.publicChallengeParameters ?? {},
     expectedAnswer:
       createResponse.privateChallengeParameters?.expectedAnswer ?? null,
