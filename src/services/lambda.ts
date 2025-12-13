@@ -38,6 +38,18 @@ type CognitoUserPoolEvent =
 
 type CognitoChallengeSession = ChallengeResultItem[];
 
+const normalizeLambdaFunctionName = (functionIdentifier: string): string => {
+  if (functionIdentifier.startsWith("arn:aws:lambda:")) {
+    const [, functionName] = functionIdentifier.split(":function:");
+
+    if (functionName) {
+      return functionName.split(":")[0];
+    }
+  }
+
+  return functionIdentifier;
+};
+
 interface EventCommonParameters {
   clientId: string;
   userAttributes: Record<string, string>;
@@ -300,10 +312,13 @@ export class LambdaService implements Lambda {
       | VerifyAuthChallengeResponseEvent,
     lambdaConfig?: FunctionConfig,
   ) {
-    const functionName = lambdaConfig?.[trigger] ?? this.config?.[trigger];
-    if (!functionName) {
+    const configuredFunctionName =
+      lambdaConfig?.[trigger] ?? this.config?.[trigger];
+    if (!configuredFunctionName) {
       throw new Error(`${trigger} trigger not configured`);
     }
+
+    const functionName = normalizeLambdaFunctionName(configuredFunctionName);
 
     const lambdaEvent = this.createLambdaEvent(event);
 
