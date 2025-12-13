@@ -45,19 +45,20 @@ export const PostConfirmation =
     },
   ) => {
     try {
-      await lambda.invoke(
-        ctx,
-        "PostConfirmation",
-        {
-          clientId,
-          clientMetadata,
-          triggerSource: source,
-          userAttributes: attributesToRecord(userAttributes),
-          username,
-          userPoolId,
-        },
-        lambdaConfig,
-      );
+      const event = {
+        clientId,
+        clientMetadata,
+        triggerSource: source,
+        userAttributes: attributesToRecord(userAttributes),
+        username,
+        userPoolId,
+      };
+
+      if (lambdaConfig) {
+        await lambda.invoke(ctx, "PostConfirmation", event, lambdaConfig);
+      } else {
+        await lambda.invoke(ctx, "PostConfirmation", event);
+      }
     } catch (ex) {
       ctx.logger.error(ex);
     }

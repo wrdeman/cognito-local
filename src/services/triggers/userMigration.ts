@@ -77,21 +77,20 @@ export const UserMigration =
     let result: UserMigrationTriggerResponse;
 
     try {
-      result = await lambda.invoke(
-        ctx,
-        "UserMigration",
-        {
-          clientId,
-          clientMetadata,
-          password,
-          triggerSource: "UserMigration_Authentication",
-          userAttributes: attributesToRecord(userAttributes),
-          username,
-          userPoolId,
-          validationData,
-        },
-        lambdaConfig,
-      );
+      const event = {
+        clientId,
+        clientMetadata,
+        password,
+        triggerSource: "UserMigration_Authentication",
+        userAttributes: attributesToRecord(userAttributes),
+        username,
+        userPoolId,
+        validationData,
+      };
+
+      result = await (lambdaConfig
+        ? lambda.invoke(ctx, "UserMigration", event, lambdaConfig)
+        : lambda.invoke(ctx, "UserMigration", event));
     } catch (_ex) {
       throw new NotAuthorizedError();
     }

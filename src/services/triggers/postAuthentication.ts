@@ -42,19 +42,20 @@ export const PostAuthentication =
     },
   ) => {
     try {
-      await lambda.invoke(
-        ctx,
-        "PostAuthentication",
-        {
-          clientId,
-          clientMetadata,
-          triggerSource: source,
-          userAttributes: attributesToRecord(userAttributes),
-          username,
-          userPoolId,
-        },
-        lambdaConfig,
-      );
+      const event = {
+        clientId,
+        clientMetadata,
+        triggerSource: source,
+        userAttributes: attributesToRecord(userAttributes),
+        username,
+        userPoolId,
+      };
+
+      if (lambdaConfig) {
+        await lambda.invoke(ctx, "PostAuthentication", event, lambdaConfig);
+      } else {
+        await lambda.invoke(ctx, "PostAuthentication", event);
+      }
     } catch (err) {
       ctx.logger.warn(err, "PostAuthentication error, ignored");
     }

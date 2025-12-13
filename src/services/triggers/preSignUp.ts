@@ -54,18 +54,18 @@ export const PreSignUp =
       userPoolId,
       validationData,
     },
-  ) =>
-    lambda.invoke(
-      ctx,
-      "PreSignUp",
-      {
-        clientId,
-        clientMetadata,
-        triggerSource: source,
-        userAttributes: attributesToRecord(userAttributes),
-        username,
-        userPoolId,
-        validationData,
-      },
-      lambdaConfig,
-    );
+  ) => {
+    const event = {
+      clientId,
+      clientMetadata,
+      triggerSource: source,
+      userAttributes: attributesToRecord(userAttributes),
+      username,
+      userPoolId,
+      validationData,
+    };
+
+    return lambdaConfig
+      ? lambda.invoke(ctx, "PreSignUp", event, lambdaConfig)
+      : lambda.invoke(ctx, "PreSignUp", event);
+  };

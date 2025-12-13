@@ -68,21 +68,20 @@ export const CustomMessage =
     },
   ) => {
     try {
-      const response = await lambda.invoke(
-        ctx,
-        "CustomMessage",
-        {
-          clientId,
-          clientMetadata,
-          codeParameter: AWS_CODE_PARAMETER,
-          triggerSource: source,
-          userAttributes: attributesToRecord(userAttributes),
-          username,
-          usernameParameter: AWS_USERNAME_PARAMETER,
-          userPoolId,
-        },
-        lambdaConfig,
-      );
+      const event = {
+        clientId,
+        clientMetadata,
+        codeParameter: AWS_CODE_PARAMETER,
+        triggerSource: source,
+        userAttributes: attributesToRecord(userAttributes),
+        username,
+        usernameParameter: AWS_USERNAME_PARAMETER,
+        userPoolId,
+      };
+
+      const response = await (lambdaConfig
+        ? lambda.invoke(ctx, "CustomMessage", event, lambdaConfig)
+        : lambda.invoke(ctx, "CustomMessage", event));
 
       return {
         emailMessage: response.emailMessage
