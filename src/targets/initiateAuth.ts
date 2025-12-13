@@ -429,18 +429,31 @@ const customAuthFlow = async (
   const isLocal = process.env.COGNITO_LOCAL === "true";
 
   const defineEnabled =
-    isLocal || services.triggers.enabled("DefineAuthChallenge");
+    isLocal ||
+    services.triggers.enabled(
+      "DefineAuthChallenge",
+      userPool.options.LambdaConfig,
+    );
   const createEnabled =
-    isLocal || services.triggers.enabled("CreateAuthChallenge");
+    isLocal ||
+    services.triggers.enabled(
+      "CreateAuthChallenge",
+      userPool.options.LambdaConfig,
+    );
   const verifyEnabled =
-    isLocal || services.triggers.enabled("VerifyAuthChallengeResponse");
+    isLocal ||
+    services.triggers.enabled(
+      "VerifyAuthChallengeResponse",
+      userPool.options.LambdaConfig,
+    );
 
-  ctx.logger.warn("CUSTOM_AUTH trigger enablement check", {
+  ctx.logger.debug("CUSTOM_AUTH trigger enablement check", {
     isLocal,
     defineEnabled,
     createEnabled,
     verifyEnabled,
     userPoolId: userPool.options.Id,
+    lambdaConfigKeys: Object.keys(userPool.options.LambdaConfig ?? {}),
   });
 
   if (!defineEnabled || !createEnabled || !verifyEnabled) {

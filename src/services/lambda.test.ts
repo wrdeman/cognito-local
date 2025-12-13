@@ -70,11 +70,11 @@ describe("Lambda function invoker", () => {
     });
 
     describe("when lambda is successful", () => {
-      it("uses lambda configuration passed at invocation time", async () => {
-        const response = Promise.resolve({
-          StatusCode: 200,
-          Payload: '{ "response": { "ok": "value" } }',
-        });
+    it("uses lambda configuration passed at invocation time", async () => {
+      const response = Promise.resolve({
+        StatusCode: 200,
+        Payload: '{ "response": { "ok": "value" } }',
+      });
         mockLambdaClient.invoke.mockReturnValue({
           promise: () => response,
         } as any);
@@ -98,12 +98,47 @@ describe("Lambda function invoker", () => {
           { UserMigration: "PoolLambdaName" },
         );
 
-        expect(mockLambdaClient.invoke).toHaveBeenCalledWith({
-          FunctionName: "PoolLambdaName",
-          InvocationType: "RequestResponse",
-          Payload: expect.any(String),
-        });
+      expect(mockLambdaClient.invoke).toHaveBeenCalledWith({
+        FunctionName: "PoolLambdaName",
+        InvocationType: "RequestResponse",
+        Payload: expect.any(String),
       });
+    });
+
+    it("supports camelCase lambda configuration keys", async () => {
+      const response = Promise.resolve({
+        StatusCode: 200,
+        Payload: '{ "response": { "ok": "value" } }',
+      });
+      mockLambdaClient.invoke.mockReturnValue({
+        promise: () => response,
+      } as any);
+      const lambda = new LambdaService({}, mockLambdaClient);
+
+      await lambda.invoke(
+        TestContext,
+        "DefineAuthChallenge",
+        {
+          clientId: "clientId",
+          clientMetadata: undefined,
+          session: [],
+          triggerSource: "DefineAuthChallenge_Authentication",
+          userAttributes: {},
+          username: "username",
+          userPoolId: "userPoolId",
+        },
+        {
+          defineAuthChallenge:
+            "arn:aws:lambda:us-east-1:000000000000:function:define-auth",
+        } as any,
+      );
+
+      expect(mockLambdaClient.invoke).toHaveBeenCalledWith({
+        FunctionName: "define-auth",
+        InvocationType: "RequestResponse",
+        Payload: expect.any(String),
+      });
+    });
 
       it("normalises full ARN function names including aliases", async () => {
         const response = Promise.resolve({
