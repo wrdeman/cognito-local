@@ -1,5 +1,9 @@
 import type { AttributeListType } from "aws-sdk/clients/cognitoidentityserviceprovider";
-import type { Lambda, PreTokenGenerationTriggerResponse } from "../lambda";
+import type {
+  FunctionConfig,
+  Lambda,
+  PreTokenGenerationTriggerResponse,
+} from "../lambda";
 import { attributesToRecord } from "../userPoolService";
 import type { Trigger } from "./trigger";
 
@@ -48,6 +52,7 @@ export type PreTokenGenerationTrigger = Trigger<
        */
       preferredRole: string | undefined;
     };
+    lambdaConfig?: FunctionConfig;
   },
   PreTokenGenerationTriggerResponse
 >;
@@ -64,18 +69,24 @@ export const PreTokenGeneration =
       clientId,
       clientMetadata,
       groupConfiguration,
+      lambdaConfig,
       source,
       userAttributes,
       username,
       userPoolId,
     },
   ) =>
-    lambda.invoke(ctx, "PreTokenGeneration", {
-      clientId,
-      clientMetadata,
-      groupConfiguration,
-      triggerSource: `TokenGeneration_${source}`,
-      userAttributes: attributesToRecord(userAttributes),
-      username,
-      userPoolId,
-    });
+    lambda.invoke(
+      ctx,
+      "PreTokenGeneration",
+      {
+        clientId,
+        clientMetadata,
+        groupConfiguration,
+        triggerSource: `TokenGeneration_${source}`,
+        userAttributes: attributesToRecord(userAttributes),
+        username,
+        userPoolId,
+      },
+      lambdaConfig,
+    );

@@ -194,6 +194,7 @@ const userPasswordAuthFlow = async (
       userAttributes: [],
       username: req.AuthParameters.USERNAME,
       userPoolId: userPool.options.Id,
+      lambdaConfig: userPool.options.LambdaConfig,
 
       // UserMigration triggered by InitiateAuth passes the request ClientMetadata as ValidationData and nothing as
       // the ClientMetadata.
@@ -234,6 +235,7 @@ const userPasswordAuthFlow = async (
       // As per the InitiateAuth docs, ClientMetadata is not passed to PostAuthentication when called from InitiateAuth
       // Source: https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_InitiateAuth.html#API_InitiateAuth_RequestSyntax
       clientMetadata: undefined,
+      lambdaConfig: userPool.options.LambdaConfig,
       source: "PostAuthentication_Authentication",
       userAttributes: user.Attributes,
       username: user.Username,
@@ -449,6 +451,7 @@ const customAuthFlow = async (
   const defineResponse = await services.triggers.defineAuthChallenge(ctx, {
     clientId: req.ClientId,
     clientMetadata: req.ClientMetadata,
+    lambdaConfig: userPool.options.LambdaConfig,
     session: session.session,
     userAttributes: user.Attributes,
     username: user.Username,
@@ -477,6 +480,7 @@ const customAuthFlow = async (
       await services.triggers.postAuthentication(ctx, {
         clientId: req.ClientId,
         clientMetadata: req.ClientMetadata,
+        lambdaConfig: userPool.options.LambdaConfig,
         source: "PostAuthentication_Authentication",
         userAttributes: user.Attributes,
         username: user.Username,
@@ -503,6 +507,7 @@ const customAuthFlow = async (
     challengeName,
     clientId: req.ClientId,
     clientMetadata: req.ClientMetadata,
+    lambdaConfig: userPool.options.LambdaConfig,
     session: session.session,
     userAttributes: user.Attributes,
     username: user.Username,

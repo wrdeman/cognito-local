@@ -1,5 +1,9 @@
 import type { AttributeListType } from "aws-sdk/clients/cognitoidentityserviceprovider";
-import type { Lambda, DefineAuthChallengeTriggerResponse } from "../lambda";
+import type {
+  Lambda,
+  DefineAuthChallengeTriggerResponse,
+  FunctionConfig,
+} from "../lambda";
 import type { ChallengeResultItem } from "../sessionStore";
 import { attributesToRecord } from "../userPoolService";
 import type { Trigger } from "./trigger";
@@ -12,6 +16,7 @@ export type DefineAuthChallengeTrigger = Trigger<
     userAttributes: AttributeListType;
     username: string;
     userPoolId: string;
+    lambdaConfig?: FunctionConfig;
   },
   DefineAuthChallengeTriggerResponse
 >;
@@ -23,14 +28,27 @@ export const DefineAuthChallenge = ({
 }): DefineAuthChallengeTrigger =>
   async (
     ctx,
-    { clientId, clientMetadata, session, userAttributes, username, userPoolId },
-  ) =>
-    lambda.invoke(ctx, "DefineAuthChallenge", {
+    {
       clientId,
       clientMetadata,
+      lambdaConfig,
       session,
-      triggerSource: "DefineAuthChallenge_Authentication",
-      userAttributes: attributesToRecord(userAttributes),
+      userAttributes,
       username,
       userPoolId,
-    });
+    },
+  ) =>
+    lambda.invoke(
+      ctx,
+      "DefineAuthChallenge",
+      {
+        clientId,
+        clientMetadata,
+        session,
+        triggerSource: "DefineAuthChallenge_Authentication",
+        userAttributes: attributesToRecord(userAttributes),
+        username,
+        userPoolId,
+      },
+      lambdaConfig,
+    );

@@ -62,6 +62,41 @@ describe("Lambda function invoker", () => {
     });
 
     describe("when lambda is successful", () => {
+      it("uses lambda configuration passed at invocation time", async () => {
+        const response = Promise.resolve({
+          StatusCode: 200,
+          Payload: '{ "response": { "ok": "value" } }',
+        });
+        mockLambdaClient.invoke.mockReturnValue({
+          promise: () => response,
+        } as any);
+        const lambda = new LambdaService({
+          UserMigration: "FallbackLambdaName",
+        }, mockLambdaClient);
+
+        await lambda.invoke(
+          TestContext,
+          "UserMigration",
+          {
+            clientId: "clientId",
+            clientMetadata: undefined,
+            password: "password",
+            triggerSource: "UserMigration_Authentication",
+            userAttributes: {},
+            username: "username",
+            userPoolId: "userPoolId",
+            validationData: undefined,
+          },
+          { UserMigration: "PoolLambdaName" },
+        );
+
+        expect(mockLambdaClient.invoke).toHaveBeenCalledWith({
+          FunctionName: "PoolLambdaName",
+          InvocationType: "RequestResponse",
+          Payload: expect.any(String),
+        });
+      });
+
       it("returns string payload as json", async () => {
         const response = Promise.resolve({
           StatusCode: 200,

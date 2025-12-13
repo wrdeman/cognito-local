@@ -1,5 +1,5 @@
 import type { AttributeListType } from "aws-sdk/clients/cognitoidentityserviceprovider";
-import type { Lambda, PreSignUpTriggerResponse } from "../lambda";
+import type { FunctionConfig, Lambda, PreSignUpTriggerResponse } from "../lambda";
 import { attributesToRecord } from "../userPoolService";
 import type { Trigger } from "./trigger";
 
@@ -13,6 +13,7 @@ export type PreSignUpTrigger = Trigger<
     userAttributes: AttributeListType;
     username: string;
     userPoolId: string;
+    lambdaConfig?: FunctionConfig;
 
     /**
      * One or more name-value pairs containing the validation data in the request to register a user. The validation data
@@ -46,6 +47,7 @@ export const PreSignUp =
     {
       clientId,
       clientMetadata,
+      lambdaConfig,
       source,
       userAttributes,
       username,
@@ -53,12 +55,17 @@ export const PreSignUp =
       validationData,
     },
   ) =>
-    lambda.invoke(ctx, "PreSignUp", {
-      clientId,
-      clientMetadata,
-      triggerSource: source,
-      userAttributes: attributesToRecord(userAttributes),
-      username,
-      userPoolId,
-      validationData,
-    });
+    lambda.invoke(
+      ctx,
+      "PreSignUp",
+      {
+        clientId,
+        clientMetadata,
+        triggerSource: source,
+        userAttributes: attributesToRecord(userAttributes),
+        username,
+        userPoolId,
+        validationData,
+      },
+      lambdaConfig,
+    );
