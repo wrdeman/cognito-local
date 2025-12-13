@@ -70,6 +70,7 @@ describe("CustomMessage trigger", () => {
           usernameParameter: "{username}",
           userPoolId: "userPoolId",
         },
+        undefined,
       );
 
       expect(message).not.toBeNull();

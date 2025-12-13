@@ -68,21 +68,20 @@ export const CustomEmailSender =
     try {
       const encrypted = await crypto.encrypt(ctx, code);
 
-      const event = {
-        code: encrypted,
-        clientId,
-        clientMetadata,
-        triggerSource: source,
-        userAttributes: attributesToRecord(userAttributes),
-        username,
-        userPoolId,
-      };
-
-      if (lambdaConfig) {
-        await lambda.invoke(ctx, "CustomEmailSender", event, lambdaConfig);
-      } else {
-        await lambda.invoke(ctx, "CustomEmailSender", event);
-      }
+      await lambda.invoke(
+        ctx,
+        "CustomEmailSender",
+        {
+          code: encrypted,
+          clientId,
+          clientMetadata,
+          triggerSource: source,
+          userAttributes: attributesToRecord(userAttributes),
+          username,
+          userPoolId,
+        },
+        lambdaConfig,
+      );
 
       return {};
     } catch (ex) {

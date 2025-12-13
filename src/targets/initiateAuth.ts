@@ -317,7 +317,7 @@ const customAuthFlow = async (
 
     resolvedUsername = userByEmail.Username;
     authParameters.USERNAME = resolvedUsername;
-    user = await userPool.getUserByUsername(ctx, resolvedUsername);
+    user = userByEmail;
 
     ctx.logger?.warn("Resolved email alias to canonical username", {
       providedUsername: req.AuthParameters.USERNAME,

@@ -78,6 +78,7 @@ describe("CustomEmailSender trigger", () => {
           username: "example@example.com",
           userPoolId: "userPoolId",
         },
+        undefined,
       );
     });
   });

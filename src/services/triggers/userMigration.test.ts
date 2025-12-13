@@ -82,6 +82,7 @@ describe("UserMigration trigger", () => {
             validation: "data",
           },
         },
+        undefined,
       );
 
       expect(user).not.toBeNull();
