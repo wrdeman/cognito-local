@@ -15,6 +15,7 @@ import { newMockUserPoolService } from "../__tests__/mockUserPoolService";
 import { UUID } from "../__tests__/patterns";
 import { TestContext } from "../__tests__/testContext";
 import * as TDB from "../__tests__/testDataBuilder";
+import { ClockFake } from "../__tests__/clockFake";
 import {
   InvalidParameterError,
   InvalidPasswordError,
@@ -22,9 +23,12 @@ import {
   PasswordResetRequiredError,
 } from "../errors";
 import type { Messages, Triggers, UserPoolService } from "../services";
+import type { CryptoService } from "../services/crypto";
 import { InMemorySessionStore } from "../services/sessionStore";
+import { LambdaService } from "../services/lambda";
 import type { TokenGenerator } from "../services/tokenGenerator";
 import { attributesToRecord, type User } from "../services/userPoolService";
+import { TriggersService } from "../services/triggers";
 import { InitiateAuth, type InitiateAuthTarget } from "./initiateAuth";
 
 describe("InitiateAuth target", () => {
@@ -624,6 +628,101 @@ describe("InitiateAuth target", () => {
         undefined,
         "RefreshTokens",
       );
+    });
+  });
+
+  describe("CUSTOM_AUTH trigger configuration", () => {
+    it("uses LambdaConfig ARNs and normalizes function names", async () => {
+      const lambdaConfig = {
+        DefineAuthChallenge:
+          "arn:aws:lambda:us-east-1:000000000000:function:define-auth",
+        CreateAuthChallenge:
+          "arn:aws:lambda:us-east-1:000000000000:function:create-auth",
+        VerifyAuthChallengeResponse:
+          "arn:aws:lambda:us-east-1:000000000000:function:verify-auth",
+      } as const;
+      const userEmail = "alias@example.com";
+      const user = TDB.user({
+        Attributes: [
+          { Name: "email", Value: userEmail },
+          { Name: "sub", Value: "sub" },
+        ],
+        Username: "user-id",
+      });
+
+      mockUserPoolService.options.UsernameAttributes = ["email"];
+      mockUserPoolService.options.LambdaConfig = lambdaConfig;
+      mockUserPoolService.getUserByUsername.mockResolvedValue(user);
+      mockUserPoolService.listUsers.mockResolvedValue([user]);
+
+      const mockLambdaClient = {
+        invoke: vi.fn(({ FunctionName }) => {
+          const payload =
+            FunctionName === "define-auth"
+              ? {
+                  response: {
+                    challengeName: "CUSTOM_CHALLENGE",
+                    failAuthentication: false,
+                    issueTokens: false,
+                  },
+                }
+              : {
+                  response: {
+                    privateChallengeParameters: { expectedAnswer: "123456" },
+                    publicChallengeParameters: { question: "otp" },
+                  },
+                };
+
+          return {
+            promise: () =>
+              Promise.resolve({
+                StatusCode: 200,
+                Payload: JSON.stringify(payload),
+              }),
+          };
+        }),
+      } as any;
+
+      const cognitoService = newMockCognitoService(mockUserPoolService);
+      cognitoService.getAppClient.mockResolvedValue(userPoolClient);
+
+      const triggers = new TriggersService(
+        new ClockFake(),
+        cognitoService,
+        new LambdaService({}, mockLambdaClient),
+        {} as unknown as CryptoService,
+      );
+
+      initiateAuth = InitiateAuth({
+        cognito: cognitoService,
+        messages: mockMessages,
+        otp: mockOtp,
+        sessionStore,
+        triggers,
+        tokenGenerator: mockTokenGenerator,
+      });
+
+      const response = await initiateAuth(TestContext, {
+        AuthFlow: "CUSTOM_AUTH",
+        ClientId: userPoolClient.ClientId,
+        AuthParameters: {
+          USERNAME: userEmail,
+        },
+      });
+
+      expect(triggers.enabled("DefineAuthChallenge", lambdaConfig)).toBe(true);
+      expect(triggers.enabled("CreateAuthChallenge", lambdaConfig)).toBe(true);
+      expect(
+        triggers.enabled("VerifyAuthChallengeResponse", lambdaConfig),
+      ).toBe(true);
+
+      expect(mockLambdaClient.invoke).toHaveBeenCalledWith(
+        expect.objectContaining({ FunctionName: "define-auth" }),
+      );
+      expect(mockLambdaClient.invoke).toHaveBeenCalledWith(
+        expect.objectContaining({ FunctionName: "create-auth" }),
+      );
+      expect(response.ChallengeName).toEqual("CUSTOM_CHALLENGE");
     });
   });
 });
