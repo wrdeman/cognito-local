@@ -182,7 +182,10 @@ const userPasswordAuthFlow = async (
 
   let user = await userPool.getUserByUsername(ctx, req.AuthParameters.USERNAME);
 
-  if (!user && services.triggers.enabled("UserMigration")) {
+  if (
+    !user &&
+    services.triggers.enabled("UserMigration", userPool.options.LambdaConfig)
+  ) {
     // https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-lambda-migrate-user.html
     //
     // Amazon Cognito invokes [the User Migration] trigger when a user does not exist in the user pool at the time
@@ -229,7 +232,12 @@ const userPasswordAuthFlow = async (
     return verifyMfaChallenge(ctx, user, req, userPool, services);
   }
 
-  if (services.triggers.enabled("PostAuthentication")) {
+  if (
+    services.triggers.enabled(
+      "PostAuthentication",
+      userPool.options.LambdaConfig,
+    )
+  ) {
     await services.triggers.postAuthentication(ctx, {
       clientId: req.ClientId,
       // As per the InitiateAuth docs, ClientMetadata is not passed to PostAuthentication when called from InitiateAuth
@@ -421,18 +429,31 @@ const customAuthFlow = async (
   const isLocal = process.env.COGNITO_LOCAL === "true";
 
   const defineEnabled =
-    isLocal || services.triggers.enabled("DefineAuthChallenge");
+    isLocal ||
+    services.triggers.enabled(
+      "DefineAuthChallenge",
+      userPool.options.LambdaConfig,
+    );
   const createEnabled =
-    isLocal || services.triggers.enabled("CreateAuthChallenge");
+    isLocal ||
+    services.triggers.enabled(
+      "CreateAuthChallenge",
+      userPool.options.LambdaConfig,
+    );
   const verifyEnabled =
-    isLocal || services.triggers.enabled("VerifyAuthChallengeResponse");
+    isLocal ||
+    services.triggers.enabled(
+      "VerifyAuthChallengeResponse",
+      userPool.options.LambdaConfig,
+    );
 
-  ctx.logger.warn("CUSTOM_AUTH trigger enablement check", {
+  ctx.logger.debug("CUSTOM_AUTH trigger enablement check", {
     isLocal,
     defineEnabled,
     createEnabled,
     verifyEnabled,
     userPoolId: userPool.options.Id,
+    lambdaConfigKeys: Object.keys(userPool.options.LambdaConfig ?? {}),
   });
 
   if (!defineEnabled || !createEnabled || !verifyEnabled) {

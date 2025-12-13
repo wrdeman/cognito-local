@@ -38,7 +38,9 @@ type CognitoUserPoolEvent =
 
 type CognitoChallengeSession = ChallengeResultItem[];
 
-const normalizeLambdaFunctionName = (functionIdentifier: string): string => {
+export const normalizeLambdaFunctionName = (
+  functionIdentifier: string,
+): string => {
   if (functionIdentifier.startsWith("arn:aws:lambda:")) {
     const [, functionName] = functionIdentifier.split(":function:");
 
@@ -49,6 +51,9 @@ const normalizeLambdaFunctionName = (functionIdentifier: string): string => {
 
   return functionIdentifier;
 };
+
+const normalizeTriggerKey = (trigger: string): string =>
+  trigger.charAt(0).toLowerCase() + trigger.slice(1);
 
 interface EventCommonParameters {
   clientId: string;
@@ -214,7 +219,7 @@ export type VerifyAuthChallengeResponseTriggerResponse = {
 };
 
 export interface Lambda {
-  enabled(lambda: keyof FunctionConfig): boolean;
+  enabled(lambda: keyof FunctionConfig, lambdaConfig?: FunctionConfig): boolean;
   invoke(
     ctx: Context,
     lambda: "DefineAuthChallenge",
@@ -292,8 +297,34 @@ export class LambdaService implements Lambda {
     this.lambdaClient = lambdaClient;
   }
 
-  public enabled(lambda: keyof FunctionConfig): boolean {
-    return !!this.config[lambda];
+  private getFunctionIdentifier(
+    trigger: keyof FunctionConfig,
+    lambdaConfig?: FunctionConfig,
+  ): string | undefined {
+    const configs: (FunctionConfig | undefined)[] = [
+      lambdaConfig,
+      this.config,
+    ];
+
+    for (const config of configs) {
+      const value =
+        (config as Record<string, string | undefined> | undefined)?.[
+          trigger
+        ] ??
+        (config as Record<string, string | undefined> | undefined)?.[
+          normalizeTriggerKey(trigger)
+        ];
+
+      if (value) {
+        return value;
+      }
+    }
+
+    return undefined;
+  }
+
+  public enabled(lambda: keyof FunctionConfig, lambdaConfig?: FunctionConfig): boolean {
+    return !!this.getFunctionIdentifier(lambda, lambdaConfig);
   }
 
   public async invoke(
@@ -312,8 +343,10 @@ export class LambdaService implements Lambda {
       | VerifyAuthChallengeResponseEvent,
     lambdaConfig?: FunctionConfig,
   ) {
-    const configuredFunctionName =
-      lambdaConfig?.[trigger] ?? this.config?.[trigger];
+    const configuredFunctionName = this.getFunctionIdentifier(
+      trigger,
+      lambdaConfig,
+    );
     if (!configuredFunctionName) {
       throw new Error(`${trigger} trigger not configured`);
     }
@@ -328,10 +361,11 @@ export class LambdaService implements Lambda {
 
     ctx.logger.debug(
       {
+        configuredFunctionName,
         functionName,
-        event: JSON.stringify(lambdaEvent, undefined, 2),
+        trigger,
       },
-      `Invoking "${functionName}" with event`,
+      `Invoking "${functionName}"`,
     );
     let result: InvocationResponse;
     try {

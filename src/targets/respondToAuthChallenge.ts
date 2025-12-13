@@ -40,11 +40,28 @@ const customAuthChallenge = async (
   user: User,
   services: RespondToAuthChallengeService,
 ): Promise<RespondToAuthChallengeResponse> => {
-  if (
-    !services.triggers.enabled("DefineAuthChallenge") ||
-    !services.triggers.enabled("CreateAuthChallenge") ||
-    !services.triggers.enabled("VerifyAuthChallengeResponse")
-  ) {
+  const defineEnabled = services.triggers.enabled(
+    "DefineAuthChallenge",
+    userPool.options.LambdaConfig,
+  );
+  const createEnabled = services.triggers.enabled(
+    "CreateAuthChallenge",
+    userPool.options.LambdaConfig,
+  );
+  const verifyEnabled = services.triggers.enabled(
+    "VerifyAuthChallengeResponse",
+    userPool.options.LambdaConfig,
+  );
+
+  ctx.logger.debug("CUSTOM_AUTH trigger enablement check", {
+    defineEnabled,
+    createEnabled,
+    verifyEnabled,
+    userPoolId: userPool.options.Id,
+    lambdaConfigKeys: Object.keys(userPool.options.LambdaConfig ?? {}),
+  });
+
+  if (!defineEnabled || !createEnabled || !verifyEnabled) {
     throw new UnsupportedError("CUSTOM_AUTH triggers not configured");
   }
 
@@ -124,7 +141,12 @@ const customAuthChallenge = async (
       await userPool.storeRefreshToken(ctx, tokens.RefreshToken, user);
     }
 
-    if (services.triggers.enabled("PostAuthentication")) {
+    if (
+      services.triggers.enabled(
+        "PostAuthentication",
+        userPool.options.LambdaConfig,
+      )
+    ) {
       await services.triggers.postAuthentication(ctx, {
         clientId: req.ClientId,
         clientMetadata: req.ClientMetadata,
