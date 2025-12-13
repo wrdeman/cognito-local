@@ -1,5 +1,9 @@
 import type { AttributeListType } from "aws-sdk/clients/cognitoidentityserviceprovider";
-import type { CustomMessageTriggerResponse, Lambda } from "../lambda";
+import type {
+  CustomMessageTriggerResponse,
+  FunctionConfig,
+  Lambda,
+} from "../lambda";
 import { attributesToRecord } from "../userPoolService";
 import type { Trigger } from "./trigger";
 
@@ -36,9 +40,10 @@ export type CustomMessageTrigger = Trigger<
      * - SignUp
      * - UpdateUserAttributes
      *
-     * Source: https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-lambda-custom-message.html#cognito-user-pools-lambda-trigger-syntax-custom-message
+    * Source: https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-lambda-custom-message.html#cognito-user-pools-lambda-trigger-syntax-custom-message
      */
     clientMetadata: Record<string, string> | undefined;
+    lambdaConfig?: FunctionConfig;
   },
   CustomMessageTriggerResponse | null
 >;
@@ -55,6 +60,7 @@ export const CustomMessage =
       clientId,
       clientMetadata,
       code,
+      lambdaConfig,
       source,
       userAttributes,
       username,
@@ -62,16 +68,21 @@ export const CustomMessage =
     },
   ) => {
     try {
-      const response = await lambda.invoke(ctx, "CustomMessage", {
-        clientId,
-        clientMetadata,
-        codeParameter: AWS_CODE_PARAMETER,
-        triggerSource: source,
-        userAttributes: attributesToRecord(userAttributes),
-        username,
-        usernameParameter: AWS_USERNAME_PARAMETER,
-        userPoolId,
-      });
+      const response = await lambda.invoke(
+        ctx,
+        "CustomMessage",
+        {
+          clientId,
+          clientMetadata,
+          codeParameter: AWS_CODE_PARAMETER,
+          triggerSource: source,
+          userAttributes: attributesToRecord(userAttributes),
+          username,
+          usernameParameter: AWS_USERNAME_PARAMETER,
+          userPoolId,
+        },
+        lambdaConfig,
+      );
 
       return {
         emailMessage: response.emailMessage

@@ -74,6 +74,7 @@ const customAuthChallenge = async (
       challengeAnswer,
       clientId: req.ClientId,
       clientMetadata: req.ClientMetadata,
+      lambdaConfig: userPool.options.LambdaConfig,
       privateChallengeParameters:
         authSession.challenge.privateChallengeParameters,
       session: authSession.session,
@@ -96,6 +97,7 @@ const customAuthChallenge = async (
   const defineResponse = await services.triggers.defineAuthChallenge(ctx, {
     clientId: req.ClientId,
     clientMetadata: req.ClientMetadata,
+    lambdaConfig: userPool.options.LambdaConfig,
     session: sessionWithResult.session,
     userAttributes: user.Attributes,
     username: user.Username,
@@ -126,6 +128,7 @@ const customAuthChallenge = async (
       await services.triggers.postAuthentication(ctx, {
         clientId: req.ClientId,
         clientMetadata: req.ClientMetadata,
+        lambdaConfig: userPool.options.LambdaConfig,
         source: "PostAuthentication_Authentication",
         userAttributes: user.Attributes,
         username: user.Username,
@@ -149,6 +152,7 @@ const customAuthChallenge = async (
     challengeName,
     clientId: req.ClientId,
     clientMetadata: req.ClientMetadata,
+    lambdaConfig: userPool.options.LambdaConfig,
     session: sessionWithResult.session,
     userAttributes: user.Attributes,
     username: user.Username,

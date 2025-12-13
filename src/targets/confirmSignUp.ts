@@ -53,6 +53,7 @@ export const ConfirmSignUp =
       await triggers.postConfirmation(ctx, {
         clientId: req.ClientId,
         clientMetadata: req.ClientMetadata,
+        lambdaConfig: userPool.options.LambdaConfig,
         source: "PostConfirmation_ConfirmSignUp",
         username: updatedUser.Username,
         userPoolId: userPool.options.Id,

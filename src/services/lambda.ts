@@ -207,53 +207,68 @@ export interface Lambda {
     ctx: Context,
     lambda: "DefineAuthChallenge",
     event: DefineAuthChallengeEvent,
+    lambdaConfig?: FunctionConfig,
   ): Promise<DefineAuthChallengeTriggerResponse>;
   invoke(
     ctx: Context,
     lambda: "CreateAuthChallenge",
     event: CreateAuthChallengeEvent,
+    lambdaConfig?: FunctionConfig,
   ): Promise<CreateAuthChallengeTriggerResponse>;
   invoke(
     ctx: Context,
     lambda: "CustomMessage",
     event: CustomMessageEvent,
+    lambdaConfig?: FunctionConfig,
   ): Promise<CustomMessageTriggerResponse>;
   invoke(
     ctx: Context,
     lambda: "UserMigration",
     event: UserMigrationEvent,
+    lambdaConfig?: FunctionConfig,
   ): Promise<UserMigrationTriggerResponse>;
   invoke(
     ctx: Context,
     lambda: "PreSignUp",
     event: PreSignUpEvent,
+    lambdaConfig?: FunctionConfig,
   ): Promise<PreSignUpTriggerResponse>;
   invoke(
     ctx: Context,
     lambda: "PreTokenGeneration",
     event: PreTokenGenerationEvent,
+    lambdaConfig?: FunctionConfig,
   ): Promise<PreTokenGenerationTriggerResponse>;
   invoke(
     ctx: Context,
     lambda: "PostAuthentication",
     event: PostAuthenticationEvent,
+    lambdaConfig?: FunctionConfig,
   ): Promise<PostAuthenticationTriggerResponse>;
   invoke(
     ctx: Context,
     lambda: "PostConfirmation",
     event: PostConfirmationEvent,
+    lambdaConfig?: FunctionConfig,
   ): Promise<PostConfirmationTriggerResponse>;
   invoke(
     ctx: Context,
     lambda: "CustomEmailSender",
     event: CustomEmailSenderEvent,
+    lambdaConfig?: FunctionConfig,
   ): Promise<CustomEmailSenderTriggerResponse>;
   invoke(
     ctx: Context,
     lambda: "VerifyAuthChallengeResponse",
     event: VerifyAuthChallengeResponseEvent,
+    lambdaConfig?: FunctionConfig,
   ): Promise<VerifyAuthChallengeResponseTriggerResponse>;
-  invoke(ctx: Context, lambda: keyof FunctionConfig, event: unknown): Promise<unknown>;
+  invoke(
+    ctx: Context,
+    lambda: keyof FunctionConfig,
+    event: unknown,
+    lambdaConfig?: FunctionConfig,
+  ): Promise<unknown>;
 }
 
 export class LambdaService implements Lambda {
@@ -283,8 +298,9 @@ export class LambdaService implements Lambda {
       | PreTokenGenerationEvent
       | UserMigrationEvent
       | VerifyAuthChallengeResponseEvent,
+    lambdaConfig?: FunctionConfig,
   ) {
-    const functionName = this.config[trigger];
+    const functionName = lambdaConfig?.[trigger] ?? this.config?.[trigger];
     if (!functionName) {
       throw new Error(`${trigger} trigger not configured`);
     }

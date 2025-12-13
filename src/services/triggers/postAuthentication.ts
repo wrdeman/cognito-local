@@ -1,5 +1,5 @@
 import type { AttributeListType } from "aws-sdk/clients/cognitoidentityserviceprovider";
-import type { Lambda } from "../lambda";
+import type { FunctionConfig, Lambda } from "../lambda";
 import { attributesToRecord } from "../userPoolService";
 import type { Trigger } from "./trigger";
 
@@ -18,6 +18,7 @@ export type PostAuthenticationTrigger = Trigger<
     userAttributes: AttributeListType;
     username: string;
     userPoolId: string;
+    lambdaConfig?: FunctionConfig;
   },
   void
 >;
@@ -30,17 +31,30 @@ export const PostAuthentication =
   ({ lambda }: PostAuthenticationServices): PostAuthenticationTrigger =>
   async (
     ctx,
-    { clientId, clientMetadata, source, userAttributes, username, userPoolId },
+    {
+      clientId,
+      clientMetadata,
+      lambdaConfig,
+      source,
+      userAttributes,
+      username,
+      userPoolId,
+    },
   ) => {
     try {
-      await lambda.invoke(ctx, "PostAuthentication", {
-        clientId,
-        clientMetadata,
-        triggerSource: source,
-        userAttributes: attributesToRecord(userAttributes),
-        username,
-        userPoolId,
-      });
+      await lambda.invoke(
+        ctx,
+        "PostAuthentication",
+        {
+          clientId,
+          clientMetadata,
+          triggerSource: source,
+          userAttributes: attributesToRecord(userAttributes),
+          username,
+          userPoolId,
+        },
+        lambdaConfig,
+      );
     } catch (err) {
       ctx.logger.warn(err, "PostAuthentication error, ignored");
     }

@@ -49,6 +49,7 @@ export const AdminConfirmSignUp =
         source: "PostConfirmation_ConfirmSignUp",
         clientId: null,
         clientMetadata: req.ClientMetadata,
+        lambdaConfig: userPool.options.LambdaConfig,
         username: updatedUser.Username,
         userPoolId: req.UserPoolId,
 

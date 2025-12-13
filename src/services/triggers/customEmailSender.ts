@@ -1,6 +1,10 @@
 import type { AttributeListType } from "aws-sdk/clients/cognitoidentityserviceprovider";
 import type { CryptoService } from "../crypto";
-import type { CustomEmailSenderTriggerResponse, Lambda } from "../lambda";
+import type {
+  CustomEmailSenderTriggerResponse,
+  FunctionConfig,
+  Lambda,
+} from "../lambda";
 import { attributesToRecord } from "../userPoolService";
 import type { Trigger } from "./trigger";
 
@@ -36,6 +40,7 @@ export type CustomEmailSenderTrigger = Trigger<
      * Source: https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-lambda-custom-message.html#cognito-user-pools-lambda-trigger-syntax-custom-message
      */
     clientMetadata: Record<string, string> | undefined;
+    lambdaConfig?: FunctionConfig;
   },
   CustomEmailSenderTriggerResponse | null
 >;
@@ -53,6 +58,7 @@ export const CustomEmailSender =
       clientId,
       clientMetadata,
       code,
+      lambdaConfig,
       source,
       userAttributes,
       username,
@@ -62,15 +68,20 @@ export const CustomEmailSender =
     try {
       const encrypted = await crypto.encrypt(ctx, code);
 
-      await lambda.invoke(ctx, "CustomEmailSender", {
-        code: encrypted,
-        clientId,
-        clientMetadata,
-        triggerSource: source,
-        userAttributes: attributesToRecord(userAttributes),
-        username,
-        userPoolId,
-      });
+      await lambda.invoke(
+        ctx,
+        "CustomEmailSender",
+        {
+          code: encrypted,
+          clientId,
+          clientMetadata,
+          triggerSource: source,
+          userAttributes: attributesToRecord(userAttributes),
+          username,
+          userPoolId,
+        },
+        lambdaConfig,
+      );
 
       return {};
     } catch (ex) {

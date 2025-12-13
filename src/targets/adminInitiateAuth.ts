@@ -58,6 +58,7 @@ const adminUserPasswordAuthFlow = async (
       validationData: {},
       userPoolId: userPool.options.Id,
       clientId: req.ClientId,
+      lambdaConfig: userPool.options.LambdaConfig,
       username: req.AuthParameters.USERNAME,
       password: req.AuthParameters.PASSWORD,
       userAttributes: [],
