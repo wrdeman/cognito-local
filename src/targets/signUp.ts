@@ -159,7 +159,7 @@ export const SignUp =
       username = sub;
     }
 
-    if (triggers.enabled("PreSignUp")) {
+    if (triggers.enabled("PreSignUp", userPool.options.LambdaConfig)) {
       const { autoConfirmUser, autoVerifyEmail, autoVerifyPhone } =
         await triggers.preSignUp(ctx, {
           clientId: req.ClientId,
@@ -222,7 +222,7 @@ export const SignUp =
 
     if (
       updatedUser.UserStatus === "CONFIRMED" &&
-      triggers.enabled("PostConfirmation")
+      triggers.enabled("PostConfirmation", userPool.options.LambdaConfig)
     ) {
       await triggers.postConfirmation(ctx, {
         clientId: req.ClientId,

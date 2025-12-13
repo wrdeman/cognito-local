@@ -214,7 +214,7 @@ export type VerifyAuthChallengeResponseTriggerResponse = {
 };
 
 export interface Lambda {
-  enabled(lambda: keyof FunctionConfig): boolean;
+  enabled(lambda: keyof FunctionConfig, lambdaConfig?: FunctionConfig): boolean;
   invoke(
     ctx: Context,
     lambda: "DefineAuthChallenge",
@@ -292,8 +292,8 @@ export class LambdaService implements Lambda {
     this.lambdaClient = lambdaClient;
   }
 
-  public enabled(lambda: keyof FunctionConfig): boolean {
-    return !!this.config[lambda];
+  public enabled(lambda: keyof FunctionConfig, lambdaConfig?: FunctionConfig): boolean {
+    return !!(lambdaConfig?.[lambda] ?? this.config[lambda]);
   }
 
   public async invoke(

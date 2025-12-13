@@ -1,7 +1,7 @@
 import type { Clock } from "../clock";
 import type { CognitoService } from "../cognitoService";
 import type { CryptoService } from "../crypto";
-import type { Lambda } from "../lambda";
+import type { FunctionConfig, Lambda } from "../lambda";
 import {
   CreateAuthChallenge,
   type CreateAuthChallengeTrigger,
@@ -47,7 +47,7 @@ type SupportedTriggers =
   | "VerifyAuthChallengeResponse";
 
 export interface Triggers {
-  enabled(trigger: SupportedTriggers): boolean;
+  enabled(trigger: SupportedTriggers, lambdaConfig?: FunctionConfig): boolean;
   createAuthChallenge: CreateAuthChallengeTrigger;
   customMessage: CustomMessageTrigger;
   customEmailSender: CustomEmailSenderTrigger;
@@ -94,7 +94,7 @@ export class TriggersService implements Triggers {
     this.verifyAuthChallengeResponse = VerifyAuthChallengeResponse({ lambda });
   }
 
-  public enabled(trigger: SupportedTriggers): boolean {
-    return this.lambda.enabled(trigger);
+  public enabled(trigger: SupportedTriggers, lambdaConfig?: FunctionConfig): boolean {
+    return this.lambda.enabled(trigger, lambdaConfig);
   }
 }

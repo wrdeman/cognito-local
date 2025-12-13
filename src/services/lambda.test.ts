@@ -41,6 +41,14 @@ describe("Lambda function invoker", () => {
 
       expect(lambda.enabled("UserMigration")).toBe(false);
     });
+
+    it("uses lambdaConfig overrides when provided", () => {
+      const lambda = new LambdaService({}, mockLambdaClient);
+
+      expect(
+        lambda.enabled("UserMigration", { UserMigration: "PoolFunction" }),
+      ).toBe(true);
+    });
   });
 
   describe("invoke", () => {

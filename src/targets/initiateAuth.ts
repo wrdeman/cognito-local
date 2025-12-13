@@ -182,7 +182,10 @@ const userPasswordAuthFlow = async (
 
   let user = await userPool.getUserByUsername(ctx, req.AuthParameters.USERNAME);
 
-  if (!user && services.triggers.enabled("UserMigration")) {
+  if (
+    !user &&
+    services.triggers.enabled("UserMigration", userPool.options.LambdaConfig)
+  ) {
     // https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-lambda-migrate-user.html
     //
     // Amazon Cognito invokes [the User Migration] trigger when a user does not exist in the user pool at the time
@@ -229,7 +232,12 @@ const userPasswordAuthFlow = async (
     return verifyMfaChallenge(ctx, user, req, userPool, services);
   }
 
-  if (services.triggers.enabled("PostAuthentication")) {
+  if (
+    services.triggers.enabled(
+      "PostAuthentication",
+      userPool.options.LambdaConfig,
+    )
+  ) {
     await services.triggers.postAuthentication(ctx, {
       clientId: req.ClientId,
       // As per the InitiateAuth docs, ClientMetadata is not passed to PostAuthentication when called from InitiateAuth
