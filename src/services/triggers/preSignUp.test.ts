@@ -74,6 +74,7 @@ describe("PreSignUp trigger", () => {
               validation: "data",
             },
           },
+          undefined,
         );
       });
     });

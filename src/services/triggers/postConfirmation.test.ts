@@ -55,11 +55,13 @@ describe("PostConfirmation trigger", () => {
           "PostConfirmation",
           {
             clientId: "clientId",
+            clientMetadata: undefined,
             triggerSource: source,
             userAttributes: { email: "example@example.com" },
             userPoolId: "userPoolId",
             username: "example@example.com",
           },
+          undefined,
         );
       });
     });

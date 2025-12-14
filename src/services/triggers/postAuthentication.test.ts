@@ -67,6 +67,7 @@ describe("PostAuthentication trigger", () => {
           userPoolId: "userPoolId",
           username: user.Username,
         },
+        undefined,
       );
     });
   });

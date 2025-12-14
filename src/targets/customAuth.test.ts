@@ -111,10 +111,7 @@ describe("CUSTOM_AUTH flow", () => {
 
     expect(initiateResponse.AuthenticationResult?.AccessToken).toEqual("access");
     expect(mockUserPoolService.listUsers).toHaveBeenCalled();
-    expect(mockUserPoolService.getUserByUsername).toHaveBeenCalledWith(
-      TestContext,
-      userWithAlias.Username,
-    );
+    expect(mockUserPoolService.getUserByUsername).not.toHaveBeenCalled();
   });
 
   it("rejects CUSTOM_AUTH when the email alias is unknown", async () => {
