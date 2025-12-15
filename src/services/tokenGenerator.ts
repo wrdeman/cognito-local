@@ -9,12 +9,7 @@ import type { AppClient } from "./appClient";
 import type { Clock } from "./clock";
 import type { Context } from "./context";
 import type { Triggers } from "./triggers";
-import {
-  attributesToRecord,
-  attributeValue,
-  customAttributes,
-  type User,
-} from "./userPoolService";
+import { attributeValue, type User } from "./userPoolService";
 
 export interface TokenConfig {
   IssuerDomain?: string;
@@ -181,8 +176,13 @@ export class JwtTokenGenerator implements TokenGenerator {
       jti: uuid.v4(),
       sub,
       token_use: "id",
-      ...attributesToRecord(customAttributes(user.Attributes)),
     };
+
+    for (const attribute of user.Attributes ?? []) {
+      if (attribute.Name.startsWith("custom:") && attribute.Value !== undefined) {
+        idToken[attribute.Name] = attribute.Value;
+      }
+    }
 
     if (userGroups.length) {
       accessToken["cognito:groups"] = userGroups;
