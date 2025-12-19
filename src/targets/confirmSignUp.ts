@@ -8,6 +8,7 @@ import {
   NotAuthorizedError,
 } from "../errors";
 import type { Services } from "../services";
+import { encodeConfirmSignUpSession } from "../services/confirmSignUpSession";
 import { attribute, attributesAppend } from "../services/userPoolService";
 import type { Target } from "./Target";
 
@@ -67,5 +68,14 @@ export const ConfirmSignUp =
       });
     }
 
-    return {};
+    return {
+      // AWS occasionally emits a Session value that can be reused when immediately
+      // initiating auth. We always emit one for consistency, even though the
+      // default cognito-local behaviour does not use it.
+      Session: encodeConfirmSignUpSession({
+        clientId: req.ClientId,
+        userPoolId: userPool.options.Id,
+        username: updatedUser.Username,
+      }),
+    };
   };

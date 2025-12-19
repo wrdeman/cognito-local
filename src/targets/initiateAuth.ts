@@ -19,6 +19,7 @@ import {
   encodeSessionToken,
   type SessionStore,
 } from "../services/sessionStore";
+import { decodeConfirmSignUpSession } from "../services/confirmSignUpSession";
 import {
   attributesIncludeMatch,
   attributesToRecord,
@@ -259,6 +260,46 @@ const userPasswordAuthFlow = async (
     userPoolClient,
     services,
   );
+};
+
+const userAuthFlow = async (
+  ctx: Context,
+  req: InitiateAuthRequest,
+  userPool: UserPoolService,
+  userPoolClient: AppClient,
+  services: InitiateAuthServices,
+): Promise<InitiateAuthResponse> => {
+  const confirmSignUpSession = decodeConfirmSignUpSession(req.Session);
+
+  if (
+    process.env.COGNITO_LOCAL_ENABLE_USER_AUTH_CONFIRM_SESSION === "true" &&
+    confirmSignUpSession &&
+    confirmSignUpSession.clientId === req.ClientId &&
+    confirmSignUpSession.userPoolId === userPool.options.Id &&
+    req.AuthParameters?.USERNAME === confirmSignUpSession.username
+  ) {
+    // This mirrors an undocumented Cognito behaviour where a ConfirmSignUp session
+    // can be passed back into InitiateAuth(USER_AUTH) to implicitly choose password
+    // authentication and immediately issue tokens. It's an AWS quirk that depends on
+    // deployment tier and is intentionally opt-in.
+    ctx.logger.info(
+      "USER_AUTH confirm-session shortcut enabled — AWS compatibility mode",
+      {
+        clientId: req.ClientId,
+        userPoolId: userPool.options.Id,
+      },
+    );
+
+    return userPasswordAuthFlow(ctx, req, userPool, userPoolClient, services);
+  }
+
+  return {
+    // By default we require the client to explicitly pick a challenge path. AWS
+    // will surface SELECT_CHALLENGE here.
+    ChallengeName: "SELECT_CHALLENGE" as any,
+    ChallengeParameters: {},
+    Session: req.Session,
+  };
 };
 
 const customAuthFlow = async (
@@ -623,6 +664,8 @@ export const InitiateAuth =
 
     if (req.AuthFlow === "USER_PASSWORD_AUTH") {
       return userPasswordAuthFlow(ctx, req, userPool, userPoolClient, services);
+    } else if (req.AuthFlow === "USER_AUTH") {
+      return userAuthFlow(ctx, req, userPool, userPoolClient, services);
     } else if (req.AuthFlow === "CUSTOM_AUTH") {
       return customAuthFlow(ctx, req, userPool, userPoolClient, services);
     } else if (
