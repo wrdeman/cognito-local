@@ -61,7 +61,11 @@ const customAuthChallenge = async (
     throw new UnsupportedError("CUSTOM_AUTH triggers not configured");
   }
 
-  const sessionId = decodeSessionToken(req.Session!);
+  if (!req.Session) {
+    throw new Error("Session is required for RespondToAuthChallenge");
+  }
+
+  const sessionId = decodeSessionToken(req.Session);
   const authSession = services.sessionStore.getSession(sessionId);
 
   if (!authSession || authSession.username !== user.Username) {
