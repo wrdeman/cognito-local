@@ -41,6 +41,15 @@ type InitiateAuthServices = Pick<
   | "triggers"
 >;
 
+type RequestWithSession = {
+  Session?: string;
+};
+
+type SelectChallengeInitiateAuthResponse = InitiateAuthResponse & {
+  ChallengeName: "SELECT_CHALLENGE";
+  AvailableChallenges: readonly ["PASSWORD", "PASSWORD_SRP"];
+};
+
 const verifyMfaChallenge = async (
   ctx: Context,
   user: User,
@@ -265,10 +274,11 @@ const userAuthFlow = async (
   userPool: UserPoolService,
   userPoolClient: AppClient,
   services: InitiateAuthServices,
-): Promise<InitiateAuthResponse> => {
+): Promise<InitiateAuthResponse | SelectChallengeInitiateAuthResponse> => {
+  const requestSession = (req as unknown as RequestWithSession).Session;
   ctx.logger.info("USER_AUTH received", {
-    hasSession: Boolean((req as any).Session),
-    session: (req as any).Session,
+    hasSession: Boolean(requestSession),
+    session: requestSession,
     authParamsKeys: Object.keys(req.AuthParameters ?? {}),
     clientId: req.ClientId,
     userPoolId: userPool.options.Id,
@@ -282,7 +292,7 @@ const userAuthFlow = async (
   ) {
     const users = await userPool.listUsers(ctx);
     const byEmail = users.find((u) =>
-      attributesIncludeMatch("email", resolvedUsername!, u.Attributes),
+      attributesIncludeMatch("email", resolvedUsername, u.Attributes),
     );
     if (byEmail) {
       resolvedUsername = byEmail.Username;
@@ -341,7 +351,7 @@ const userAuthFlow = async (
     );
   }
   ctx.logger.info("USER_AUTH returning SELECT_CHALLENGE", {
-    returningSession: (req as any).Session,
+    returningSession: requestSession,
   });
 
   const session = services.sessionStore.createSession({
@@ -357,10 +367,10 @@ const userAuthFlow = async (
   });
 
   return {
-    ChallengeName: "SELECT_CHALLENGE" as any,
+    ChallengeName: "SELECT_CHALLENGE",
     ChallengeParameters: {},
     Session: encodeSessionToken(session.id),
-    AvailableChallenges: ["PASSWORD", "PASSWORD_SRP"] as any,
+    AvailableChallenges: ["PASSWORD", "PASSWORD_SRP"] as const,
   };
 };
 

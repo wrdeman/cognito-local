@@ -33,7 +33,7 @@ export const VerifyAuthChallengeResponse =
       clientMetadata,
       lambdaConfig,
       privateChallengeParameters,
-      session,
+      _session,
       userAttributes,
       username,
       userPoolId,
