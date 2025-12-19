@@ -94,7 +94,10 @@ export class TriggersService implements Triggers {
     this.verifyAuthChallengeResponse = VerifyAuthChallengeResponse({ lambda });
   }
 
-  public enabled(trigger: SupportedTriggers, lambdaConfig?: FunctionConfig): boolean {
+  public enabled(
+    trigger: SupportedTriggers,
+    lambdaConfig?: FunctionConfig,
+  ): boolean {
     return this.lambda.enabled(trigger, lambdaConfig);
   }
 }

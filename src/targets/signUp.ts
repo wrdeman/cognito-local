@@ -1,9 +1,9 @@
+import { randomUUID } from "node:crypto";
 import type {
   SignUpRequest,
   SignUpResponse,
   UserStatusType,
 } from "aws-sdk/clients/cognitoidentityserviceprovider";
-import { randomUUID } from "node:crypto";
 import * as uuid from "uuid";
 import { InvalidParameterError, UsernameExistsError } from "../errors";
 import type { Messages, Services, UserPoolService } from "../services";
@@ -86,7 +86,8 @@ export const SignUp =
         CodeDeliveryDetails: undefined,
         UserConfirmed: existingUser.UserStatus === "CONFIRMED",
         UserSub:
-          attributeValue("sub", existingUser.Attributes) ?? existingUser.Username,
+          attributeValue("sub", existingUser.Attributes) ??
+          existingUser.Username,
       };
     }
 

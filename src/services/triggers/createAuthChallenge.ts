@@ -22,11 +22,8 @@ export type CreateAuthChallengeTrigger = Trigger<
   CreateAuthChallengeTriggerResponse
 >;
 
-export const CreateAuthChallenge = ({
-  lambda,
-}: {
-  lambda: Lambda;
-}): CreateAuthChallengeTrigger =>
+export const CreateAuthChallenge =
+  ({ lambda }: { lambda: Lambda }): CreateAuthChallengeTrigger =>
   async (
     ctx,
     {

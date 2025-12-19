@@ -23,11 +23,8 @@ export type VerifyAuthChallengeResponseTrigger = Trigger<
   VerifyAuthChallengeResponseTriggerResponse
 >;
 
-export const VerifyAuthChallengeResponse = ({
-  lambda,
-}: {
-  lambda: Lambda;
-}): VerifyAuthChallengeResponseTrigger =>
+export const VerifyAuthChallengeResponse =
+  ({ lambda }: { lambda: Lambda }): VerifyAuthChallengeResponseTrigger =>
   async (
     ctx,
     {

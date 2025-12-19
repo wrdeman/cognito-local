@@ -1,8 +1,8 @@
 import type { AttributeListType } from "aws-sdk/clients/cognitoidentityserviceprovider";
 import type {
-  Lambda,
   DefineAuthChallengeTriggerResponse,
   FunctionConfig,
+  Lambda,
 } from "../lambda";
 import type { ChallengeResultItem } from "../sessionStore";
 import { attributesToRecord } from "../userPoolService";
@@ -21,11 +21,8 @@ export type DefineAuthChallengeTrigger = Trigger<
   DefineAuthChallengeTriggerResponse
 >;
 
-export const DefineAuthChallenge = ({
-  lambda,
-}: {
-  lambda: Lambda;
-}): DefineAuthChallengeTrigger =>
+export const DefineAuthChallenge =
+  ({ lambda }: { lambda: Lambda }): DefineAuthChallengeTrigger =>
   async (
     ctx,
     {

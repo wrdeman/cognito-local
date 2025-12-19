@@ -8,6 +8,7 @@ import {
   type MockedObject,
   vi,
 } from "vitest";
+import { ClockFake } from "../__tests__/clockFake";
 import { newMockCognitoService } from "../__tests__/mockCognitoService";
 import { newMockMessages } from "../__tests__/mockMessages";
 import { newMockTokenGenerator } from "../__tests__/mockTokenGenerator";
@@ -16,7 +17,6 @@ import { newMockUserPoolService } from "../__tests__/mockUserPoolService";
 import { UUID } from "../__tests__/patterns";
 import { TestContext } from "../__tests__/testContext";
 import * as TDB from "../__tests__/testDataBuilder";
-import { ClockFake } from "../__tests__/clockFake";
 import {
   InvalidParameterError,
   InvalidPasswordError,
@@ -24,13 +24,13 @@ import {
   PasswordResetRequiredError,
 } from "../errors";
 import type { Messages, Triggers, UserPoolService } from "../services";
-import type { CryptoService } from "../services/crypto";
 import { encodeConfirmSignUpSession } from "../services/confirmSignUpSession";
-import { InMemorySessionStore } from "../services/sessionStore";
+import type { CryptoService } from "../services/crypto";
 import { LambdaService } from "../services/lambda";
+import { InMemorySessionStore } from "../services/sessionStore";
 import type { TokenGenerator } from "../services/tokenGenerator";
-import { attributesToRecord, type User } from "../services/userPoolService";
 import { TriggersService } from "../services/triggers";
+import { attributesToRecord, type User } from "../services/userPoolService";
 import { InitiateAuth, type InitiateAuthTarget } from "./initiateAuth";
 
 describe("InitiateAuth target", () => {
@@ -812,7 +812,9 @@ describe("InitiateAuth target", () => {
           PASSWORD: "Password123!",
         },
         ClientId: userPoolClient.ClientId,
-        Session: Buffer.from("not-a-confirm-session", "utf-8").toString("base64"),
+        Session: Buffer.from("not-a-confirm-session", "utf-8").toString(
+          "base64",
+        ),
       });
 
       expect(response.ChallengeName).toEqual("SELECT_CHALLENGE");

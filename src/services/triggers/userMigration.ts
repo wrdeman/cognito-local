@@ -36,7 +36,7 @@ export type UserMigrationTrigger = Trigger<
      * One or more key-value pairs containing the validation data in the user's sign-in request. You can pass this data to
      * your Lambda function by using the ClientMetadata parameter in the InitiateAuth and AdminInitiateAuth API actions.
      *
-    * Source: https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-lambda-migrate-user.html#cognito-user-pools-lambda-trigger-syntax-user-migration
+     * Source: https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-lambda-migrate-user.html#cognito-user-pools-lambda-trigger-syntax-user-migration
      */
     validationData: Record<string, string> | undefined;
     lambdaConfig?: FunctionConfig;

@@ -2,9 +2,9 @@ import * as AWS from "aws-sdk";
 import type pino from "pino";
 import {
   DateClock,
+  InMemorySessionStore,
   LambdaService,
   MessagesService,
-  InMemorySessionStore,
   TriggersService,
 } from "../services";
 import { CognitoServiceFactoryImpl } from "../services/cognitoService";

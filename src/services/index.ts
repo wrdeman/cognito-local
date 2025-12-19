@@ -2,22 +2,22 @@ import type { Config } from "../server/config";
 import type { Clock } from "./clock";
 import type { CognitoService } from "./cognitoService";
 import type { Messages } from "./messages";
+import type { SessionStore } from "./sessionStore";
 import type { TokenGenerator } from "./tokenGenerator";
 import type { Triggers } from "./triggers";
-import type { SessionStore } from "./sessionStore";
 
 export { Clock, DateClock } from "./clock";
 export { CognitoService, CognitoServiceImpl } from "./cognitoService";
 export { Lambda, LambdaService } from "./lambda";
 export { Messages, MessagesService } from "./messages";
-export { Triggers, TriggersService } from "./triggers";
-export { UserPoolService, UserPoolServiceImpl } from "./userPoolService";
 export {
-  InMemorySessionStore,
-  type SessionStore,
   decodeSessionToken,
   encodeSessionToken,
+  InMemorySessionStore,
+  type SessionStore,
 } from "./sessionStore";
+export { Triggers, TriggersService } from "./triggers";
+export { UserPoolService, UserPoolServiceImpl } from "./userPoolService";
 
 export interface Services {
   clock: Clock;

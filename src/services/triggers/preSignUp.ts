@@ -1,5 +1,9 @@
 import type { AttributeListType } from "aws-sdk/clients/cognitoidentityserviceprovider";
-import type { FunctionConfig, Lambda, PreSignUpTriggerResponse } from "../lambda";
+import type {
+  FunctionConfig,
+  Lambda,
+  PreSignUpTriggerResponse,
+} from "../lambda";
 import { attributesToRecord } from "../userPoolService";
 import type { Trigger } from "./trigger";
 

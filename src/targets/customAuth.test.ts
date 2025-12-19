@@ -1,4 +1,11 @@
-import { beforeEach, describe, expect, it, vi, type MockedObject } from "vitest";
+import {
+  beforeEach,
+  describe,
+  expect,
+  it,
+  type MockedObject,
+  vi,
+} from "vitest";
 import { ClockFake } from "../__tests__/clockFake";
 import { newMockCognitoService } from "../__tests__/mockCognitoService";
 import { newMockTokenGenerator } from "../__tests__/mockTokenGenerator";
@@ -9,8 +16,8 @@ import * as TDB from "../__tests__/testDataBuilder";
 import { NotAuthorizedError } from "../errors";
 import type { Triggers, UserPoolService } from "../services";
 import {
-  InMemorySessionStore,
   decodeSessionToken,
+  InMemorySessionStore,
 } from "../services/sessionStore";
 import type { TokenGenerator } from "../services/tokenGenerator";
 import { InitiateAuth, type InitiateAuthTarget } from "./initiateAuth";
@@ -109,7 +116,9 @@ describe("CUSTOM_AUTH flow", () => {
       },
     });
 
-    expect(initiateResponse.AuthenticationResult?.AccessToken).toEqual("access");
+    expect(initiateResponse.AuthenticationResult?.AccessToken).toEqual(
+      "access",
+    );
     expect(mockUserPoolService.listUsers).toHaveBeenCalled();
     expect(mockUserPoolService.getUserByUsername).not.toHaveBeenCalled();
   });

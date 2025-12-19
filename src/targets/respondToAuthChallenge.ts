@@ -8,9 +8,9 @@ import {
   NotAuthorizedError,
   UnsupportedError,
 } from "../errors";
+import type { Services } from "../services";
 import type { AppClient } from "../services/appClient";
 import type { Context } from "../services/context";
-import type { Services } from "../services";
 import {
   decodeSessionToken,
   encodeSessionToken,
@@ -25,11 +25,7 @@ export type RespondToAuthChallengeTarget = Target<
 
 type RespondToAuthChallengeService = Pick<
   Services,
-  | "clock"
-  | "cognito"
-  | "sessionStore"
-  | "triggers"
-  | "tokenGenerator"
+  "clock" | "cognito" | "sessionStore" | "triggers" | "tokenGenerator"
 >;
 
 const customAuthChallenge = async (
@@ -166,9 +162,8 @@ const customAuthChallenge = async (
     };
   }
 
-  const challengeName: "CUSTOM_CHALLENGE" = (
-    defineResponse.challengeName ?? "CUSTOM_CHALLENGE"
-  ) as "CUSTOM_CHALLENGE";
+  const challengeName: "CUSTOM_CHALLENGE" = (defineResponse.challengeName ??
+    "CUSTOM_CHALLENGE") as "CUSTOM_CHALLENGE";
 
   const createResponse = await services.triggers.createAuthChallenge(ctx, {
     challengeName,
@@ -183,8 +178,7 @@ const customAuthChallenge = async (
 
   services.sessionStore.setChallenge(sessionId, {
     challengeName,
-    privateChallengeParameters:
-      createResponse.privateChallengeParameters ?? {},
+    privateChallengeParameters: createResponse.privateChallengeParameters ?? {},
     publicChallengeParameters: createResponse.publicChallengeParameters ?? {},
     expectedAnswer:
       createResponse.privateChallengeParameters?.expectedAnswer ?? null,

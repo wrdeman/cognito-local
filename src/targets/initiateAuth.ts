@@ -14,12 +14,9 @@ import {
 } from "../errors";
 import type { Services, UserPoolService } from "../services";
 import type { AppClient } from "../services/appClient";
-import type { Context } from "../services/context";
-import {
-  encodeSessionToken,
-  type SessionStore,
-} from "../services/sessionStore";
 import { decodeConfirmSignUpSession } from "../services/confirmSignUpSession";
+import type { Context } from "../services/context";
+import { encodeSessionToken } from "../services/sessionStore";
 import {
   attributesIncludeMatch,
   attributesToRecord,
@@ -269,14 +266,35 @@ const userAuthFlow = async (
   userPoolClient: AppClient,
   services: InitiateAuthServices,
 ): Promise<InitiateAuthResponse> => {
+  ctx.logger.info("USER_AUTH received", {
+    hasSession: Boolean((req as any).Session),
+    session: (req as any).Session,
+    authParamsKeys: Object.keys(req.AuthParameters ?? {}),
+    clientId: req.ClientId,
+    userPoolId: userPool.options.Id,
+  });
   const confirmSignUpSession = decodeConfirmSignUpSession(req.Session);
+  let resolvedUsername = req.AuthParameters?.USERNAME;
+
+  if (
+    resolvedUsername &&
+    userPool.options.UsernameAttributes?.includes("email")
+  ) {
+    const users = await userPool.listUsers(ctx);
+    const byEmail = users.find((u) =>
+      attributesIncludeMatch("email", resolvedUsername!, u.Attributes),
+    );
+    if (byEmail) {
+      resolvedUsername = byEmail.Username;
+    }
+  }
 
   if (
     process.env.COGNITO_LOCAL_ENABLE_USER_AUTH_CONFIRM_SESSION === "true" &&
     confirmSignUpSession &&
     confirmSignUpSession.clientId === req.ClientId &&
     confirmSignUpSession.userPoolId === userPool.options.Id &&
-    req.AuthParameters?.USERNAME === confirmSignUpSession.username
+    resolvedUsername === confirmSignUpSession.username
   ) {
     // This mirrors an undocumented Cognito behaviour where a ConfirmSignUp session
     // can be passed back into InitiateAuth(USER_AUTH) to implicitly choose password
@@ -322,13 +340,27 @@ const userAuthFlow = async (
       services,
     );
   }
+  ctx.logger.info("USER_AUTH returning SELECT_CHALLENGE", {
+    returningSession: (req as any).Session,
+  });
+
+  const session = services.sessionStore.createSession({
+    clientId: req.ClientId,
+    userPoolId: userPool.options.Id,
+    username: req.AuthParameters?.USERNAME,
+  });
+
+  ctx.logger.info("USER_AUTH SELECT_CHALLENGE session created", {
+    sessionId: session.id,
+    clientId: req.ClientId,
+    userPoolId: userPool.options.Id,
+  });
 
   return {
-    // By default we require the client to explicitly pick a challenge path. AWS
-    // will surface SELECT_CHALLENGE here.
     ChallengeName: "SELECT_CHALLENGE" as any,
     ChallengeParameters: {},
-    Session: req.Session,
+    Session: encodeSessionToken(session.id),
+    AvailableChallenges: ["PASSWORD", "PASSWORD_SRP"] as any,
   };
 };
 
@@ -375,7 +407,7 @@ const customAuthFlow = async (
     });
     const users = await userPool.listUsers(ctx);
     ctx.logger.warn(
-      "InitiateAuth listUsers" + users.length + userPool.options.Id,
+      `InitiateAuth listUsers${users.length}${userPool.options.Id}`,
       {},
     );
     const userByEmail = users.find((candidate) =>

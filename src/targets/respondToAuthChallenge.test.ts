@@ -23,15 +23,15 @@ import type { Triggers, UserPoolService } from "../services";
 import type { CryptoService } from "../services/crypto";
 import { LambdaService } from "../services/lambda";
 import {
-  InMemorySessionStore,
   encodeSessionToken,
+  InMemorySessionStore,
 } from "../services/sessionStore";
 import type { TokenGenerator } from "../services/tokenGenerator";
+import { TriggersService } from "../services/triggers";
 import {
   RespondToAuthChallenge,
   type RespondToAuthChallengeTarget,
 } from "./respondToAuthChallenge";
-import { TriggersService } from "../services/triggers";
 
 const currentDate = new Date();
 

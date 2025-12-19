@@ -179,7 +179,10 @@ export class JwtTokenGenerator implements TokenGenerator {
     };
 
     for (const attribute of user.Attributes ?? []) {
-      if (attribute.Name.startsWith("custom:") && attribute.Value !== undefined) {
+      if (
+        attribute.Name.startsWith("custom:") &&
+        attribute.Value !== undefined
+      ) {
         idToken[attribute.Name] = attribute.Value;
       }
     }

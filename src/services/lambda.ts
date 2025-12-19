@@ -1,3 +1,4 @@
+import path from "node:path";
 import type {
   CreateAuthChallengeTriggerEvent,
   CustomEmailSenderTriggerEvent,
@@ -21,7 +22,6 @@ import {
 } from "../errors";
 import type { Context } from "./context";
 import type { ChallengeResultItem } from "./sessionStore";
-import path from "node:path";
 
 type CognitoUserPoolEvent =
   | CreateAuthChallengeTriggerEvent
@@ -301,16 +301,11 @@ export class LambdaService implements Lambda {
     trigger: keyof FunctionConfig,
     lambdaConfig?: FunctionConfig,
   ): string | undefined {
-    const configs: (FunctionConfig | undefined)[] = [
-      lambdaConfig,
-      this.config,
-    ];
+    const configs: (FunctionConfig | undefined)[] = [lambdaConfig, this.config];
 
     for (const config of configs) {
       const value =
-        (config as Record<string, string | undefined> | undefined)?.[
-          trigger
-        ] ??
+        (config as Record<string, string | undefined> | undefined)?.[trigger] ??
         (config as Record<string, string | undefined> | undefined)?.[
           normalizeTriggerKey(trigger)
         ];
@@ -323,7 +318,10 @@ export class LambdaService implements Lambda {
     return undefined;
   }
 
-  public enabled(lambda: keyof FunctionConfig, lambdaConfig?: FunctionConfig): boolean {
+  public enabled(
+    lambda: keyof FunctionConfig,
+    lambdaConfig?: FunctionConfig,
+  ): boolean {
     return !!this.getFunctionIdentifier(lambda, lambdaConfig);
   }
 
@@ -431,12 +429,16 @@ export class LambdaService implements Lambda {
       const result = await handler(lambdaEvent);
       const payload = (result ?? lambdaEvent) as { response?: unknown };
 
-      if (!payload || typeof payload !== "object" || payload.response === undefined) {
+      if (
+        !payload ||
+        typeof payload !== "object" ||
+        payload.response === undefined
+      ) {
         throw new InvalidLambdaResponseError();
       }
 
       return payload.response;
-    } catch (err) {
+    } catch (_err) {
       throw new UnexpectedLambdaExceptionError();
     }
   }

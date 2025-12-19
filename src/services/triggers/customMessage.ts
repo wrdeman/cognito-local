@@ -40,7 +40,7 @@ export type CustomMessageTrigger = Trigger<
      * - SignUp
      * - UpdateUserAttributes
      *
-    * Source: https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-lambda-custom-message.html#cognito-user-pools-lambda-trigger-syntax-custom-message
+     * Source: https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-lambda-custom-message.html#cognito-user-pools-lambda-trigger-syntax-custom-message
      */
     clientMetadata: Record<string, string> | undefined;
     lambdaConfig?: FunctionConfig;

@@ -39,7 +39,11 @@ export interface SessionStore {
 export class InMemorySessionStore implements SessionStore {
   private readonly sessions = new Map<string, AuthSession>();
 
-  public createSession({ clientId, userPoolId, username }: {
+  public createSession({
+    clientId,
+    userPoolId,
+    username,
+  }: {
     clientId: string;
     userPoolId: string;
     username: string;
@@ -61,7 +65,10 @@ export class InMemorySessionStore implements SessionStore {
     return this.sessions.get(sessionId) ?? null;
   }
 
-  public setChallenge(sessionId: string, challenge: ChallengeState): AuthSession {
+  public setChallenge(
+    sessionId: string,
+    challenge: ChallengeState,
+  ): AuthSession {
     const existing = this.sessions.get(sessionId);
     if (!existing) {
       throw new Error("Invalid session");
@@ -76,7 +83,10 @@ export class InMemorySessionStore implements SessionStore {
     return updated;
   }
 
-  public recordChallengeResult(sessionId: string, result: boolean): AuthSession {
+  public recordChallengeResult(
+    sessionId: string,
+    result: boolean,
+  ): AuthSession {
     const existing = this.sessions.get(sessionId);
     if (!existing || !existing.challenge) {
       throw new Error("Invalid session");

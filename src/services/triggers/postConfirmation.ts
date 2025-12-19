@@ -16,7 +16,7 @@ export type PostConfirmationTrigger = Trigger<
      * the following API actions: AdminConfirmSignUp, ConfirmForgotPassword, ConfirmSignUp, and SignUp.
      *
      * source: https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-lambda-post-confirmation.html#cognito-user-pools-lambda-trigger-syntax-post-confirmation
-    */
+     */
     clientMetadata?: Record<string, string>;
     userAttributes: AttributeListType;
     username: string;
