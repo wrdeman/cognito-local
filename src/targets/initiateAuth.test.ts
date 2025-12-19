@@ -1,4 +1,5 @@
 import {
+  afterEach,
   beforeEach,
   describe,
   expect,
@@ -24,6 +25,7 @@ import {
 } from "../errors";
 import type { Messages, Triggers, UserPoolService } from "../services";
 import type { CryptoService } from "../services/crypto";
+import { encodeConfirmSignUpSession } from "../services/confirmSignUpSession";
 import { InMemorySessionStore } from "../services/sessionStore";
 import { LambdaService } from "../services/lambda";
 import type { TokenGenerator } from "../services/tokenGenerator";
@@ -723,6 +725,122 @@ describe("InitiateAuth target", () => {
         expect.objectContaining({ FunctionName: "create-auth" }),
       );
       expect(response.ChallengeName).toEqual("CUSTOM_CHALLENGE");
+    });
+  });
+
+  describe("USER_AUTH auth flow", () => {
+    afterEach(() => {
+      delete process.env.COGNITO_LOCAL_ENABLE_USER_AUTH_CONFIRM_SESSION;
+    });
+
+    it("returns SELECT_CHALLENGE by default even with a confirm session", async () => {
+      const user = TDB.user();
+      mockUserPoolService.getUserByUsername.mockResolvedValue(user);
+
+      const session = encodeConfirmSignUpSession({
+        clientId: userPoolClient.ClientId,
+        userPoolId: userPoolClient.UserPoolId,
+        username: user.Username,
+      });
+
+      const response = await initiateAuth(TestContext, {
+        AuthFlow: "USER_AUTH",
+        AuthParameters: {
+          USERNAME: user.Username,
+        },
+        ClientId: userPoolClient.ClientId,
+        Session: session,
+      });
+
+      expect(response.ChallengeName).toEqual("SELECT_CHALLENGE");
+      expect(response.AuthenticationResult).toBeUndefined();
+    });
+
+    it("short-circuits to password auth when the flag is enabled", async () => {
+      process.env.COGNITO_LOCAL_ENABLE_USER_AUTH_CONFIRM_SESSION = "true";
+
+      const user = TDB.user();
+      mockUserPoolService.getUserByUsername.mockResolvedValue(user);
+      mockUserPoolService.listUserGroupMembership.mockResolvedValue([]);
+      mockTokenGenerator.generate.mockResolvedValue({
+        AccessToken: "access",
+        IdToken: "id",
+        RefreshToken: "refresh",
+      });
+
+      const session = encodeConfirmSignUpSession({
+        clientId: userPoolClient.ClientId,
+        userPoolId: userPoolClient.UserPoolId,
+        username: user.Username,
+      });
+
+      const response = await initiateAuth(TestContext, {
+        AuthFlow: "USER_AUTH",
+        AuthParameters: {
+          USERNAME: user.Username,
+        },
+        ClientId: userPoolClient.ClientId,
+        Session: session,
+      });
+
+      expect(response.AuthenticationResult?.AccessToken).toEqual("access");
+    });
+
+    it("still returns SELECT_CHALLENGE when the flag is enabled but no session is provided", async () => {
+      process.env.COGNITO_LOCAL_ENABLE_USER_AUTH_CONFIRM_SESSION = "true";
+
+      const response = await initiateAuth(TestContext, {
+        AuthFlow: "USER_AUTH",
+        AuthParameters: {
+          USERNAME: "user", // USERNAME is still required by the flow
+          PASSWORD: "Password123!",
+        },
+        ClientId: userPoolClient.ClientId,
+      });
+
+      expect(response.ChallengeName).toEqual("SELECT_CHALLENGE");
+      expect(response.AuthenticationResult).toBeUndefined();
+    });
+
+    it("returns SELECT_CHALLENGE when the provided session is not from ConfirmSignUp", async () => {
+      process.env.COGNITO_LOCAL_ENABLE_USER_AUTH_CONFIRM_SESSION = "true";
+
+      const response = await initiateAuth(TestContext, {
+        AuthFlow: "USER_AUTH",
+        AuthParameters: {
+          USERNAME: "user",
+          PASSWORD: "Password123!",
+        },
+        ClientId: userPoolClient.ClientId,
+        Session: Buffer.from("not-a-confirm-session", "utf-8").toString("base64"),
+      });
+
+      expect(response.ChallengeName).toEqual("SELECT_CHALLENGE");
+      expect(response.AuthenticationResult).toBeUndefined();
+    });
+
+    it("does not affect other flows", async () => {
+      process.env.COGNITO_LOCAL_ENABLE_USER_AUTH_CONFIRM_SESSION = "true";
+
+      const user = TDB.user();
+      mockUserPoolService.getUserByUsername.mockResolvedValue(user);
+      mockUserPoolService.listUserGroupMembership.mockResolvedValue([]);
+      mockTokenGenerator.generate.mockResolvedValue({
+        AccessToken: "access",
+        IdToken: "id",
+        RefreshToken: "refresh",
+      });
+
+      const response = await initiateAuth(TestContext, {
+        AuthFlow: "USER_PASSWORD_AUTH",
+        AuthParameters: {
+          USERNAME: user.Username,
+          PASSWORD: user.Password!,
+        },
+        ClientId: userPoolClient.ClientId,
+      });
+
+      expect(response.AuthenticationResult?.AccessToken).toEqual("access");
     });
   });
 });

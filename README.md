@@ -23,6 +23,7 @@ A _Good Enough_ offline emulator for [Amazon Cognito](https://aws.amazon.com/cog
 - [Confirmation codes](#confirmation-codes)
 - [Advanced](#advanced)
   - [Debugging Cognito Local](#debugging-cognito-local)
+  - [AWS USER_AUTH Compatibility Shortcut (Opt-in)](#aws-user_auth-compatibility-shortcut-opt-in)
 
 <!-- tocstop -->
 
@@ -561,3 +562,20 @@ Open Chrome and navigate to `chrome://inspect`. Click the `Open dedicated DevToo
 DevTools window. You can then open the Sources tab and browse to a Cognito Local file, or press `Cmd+P` or `Ctrl+P` to
 open the file navigator and open `src/bin/start.ts` or a target you want to debug then place a breakpoint and run your
 code that uses Cognito Local or a CLI command.
+
+### AWS USER_AUTH Compatibility Shortcut (Opt-in)
+
+AWS Cognito exhibits an undocumented shortcut in some tiers where passing the `Session` returned from a `ConfirmSignUp`
+call directly into `InitiateAuth` with the `USER_AUTH` flow will implicitly select password authentication and return
+tokens immediately, skipping the `SELECT_CHALLENGE` step entirely. This behaviour is fragile, tier-dependent, and is not
+recommended for production designs.
+
+To mimic this behaviour in Cognito Local, opt in with the environment variable:
+
+```
+COGNITO_LOCAL_ENABLE_USER_AUTH_CONFIRM_SESSION=true
+```
+
+When enabled, a valid `ConfirmSignUp` session token supplied to `InitiateAuth` (`AuthFlow=USER_AUTH`) will bypass the
+challenge selection step and complete password authentication. The default remains strict (the shortcut is disabled)
+and the recommended approach is to continue using explicit challenge flows instead of relying on this compatibility shim.
