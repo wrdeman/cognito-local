@@ -747,7 +747,6 @@ describe("InitiateAuth target", () => {
         AuthFlow: "USER_AUTH",
         AuthParameters: {
           USERNAME: user.Username,
-          PASSWORD: user.Password!,
         },
         ClientId: userPoolClient.ClientId,
         Session: session,
@@ -779,7 +778,6 @@ describe("InitiateAuth target", () => {
         AuthFlow: "USER_AUTH",
         AuthParameters: {
           USERNAME: user.Username,
-          PASSWORD: user.Password!,
         },
         ClientId: userPoolClient.ClientId,
         Session: session,

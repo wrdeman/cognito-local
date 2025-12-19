@@ -290,7 +290,37 @@ const userAuthFlow = async (
       },
     );
 
-    return userPasswordAuthFlow(ctx, req, userPool, userPoolClient, services);
+    let authParameters = req.AuthParameters;
+
+    if (!authParameters?.PASSWORD) {
+      const user = await userPool.getUserByUsername(
+        ctx,
+        confirmSignUpSession.username,
+      );
+
+      if (!user) {
+        // Align with the existing password flow error paths when the user cannot be
+        // found. No password is provided with the ConfirmSignUp session shortcut, so
+        // we reuse the stored password to satisfy the downstream validation checks.
+        throw new NotAuthorizedError();
+      }
+
+      authParameters = {
+        ...authParameters,
+        PASSWORD: user.Password,
+      };
+    }
+
+    return userPasswordAuthFlow(
+      ctx,
+      {
+        ...req,
+        AuthParameters: authParameters,
+      },
+      userPool,
+      userPoolClient,
+      services,
+    );
   }
 
   return {
