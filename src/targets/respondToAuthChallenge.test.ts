@@ -1,4 +1,11 @@
-import { beforeEach, describe, expect, it, type MockedObject } from "vitest";
+import {
+  beforeEach,
+  describe,
+  expect,
+  it,
+  type MockedObject,
+  vi,
+} from "vitest";
 import { ClockFake } from "../__tests__/clockFake";
 import { newMockCognitoService } from "../__tests__/mockCognitoService";
 import { newMockTokenGenerator } from "../__tests__/mockTokenGenerator";
@@ -10,9 +17,17 @@ import {
   CodeMismatchError,
   InvalidParameterError,
   NotAuthorizedError,
+  UnsupportedError,
 } from "../errors";
 import type { Triggers, UserPoolService } from "../services";
+import type { CryptoService } from "../services/crypto";
+import { LambdaService } from "../services/lambda";
+import {
+  encodeSessionToken,
+  InMemorySessionStore,
+} from "../services/sessionStore";
 import type { TokenGenerator } from "../services/tokenGenerator";
+import { TriggersService } from "../services/triggers";
 import {
   RespondToAuthChallenge,
   type RespondToAuthChallengeTarget,
@@ -25,6 +40,7 @@ describe("RespondToAuthChallenge target", () => {
   let mockTokenGenerator: MockedObject<TokenGenerator>;
   let mockTriggers: MockedObject<Triggers>;
   let mockUserPoolService: MockedObject<UserPoolService>;
+  let sessionStore: InMemorySessionStore;
   let clock: ClockFake;
   const userPoolClient = TDB.appClient();
 
@@ -35,6 +51,7 @@ describe("RespondToAuthChallenge target", () => {
     mockUserPoolService = newMockUserPoolService({
       Id: userPoolClient.UserPoolId,
     });
+    sessionStore = new InMemorySessionStore();
 
     const mockCognitoService = newMockCognitoService(mockUserPoolService);
     mockCognitoService.getAppClient.mockResolvedValue(userPoolClient);
@@ -42,6 +59,7 @@ describe("RespondToAuthChallenge target", () => {
     respondToAuthChallenge = RespondToAuthChallenge({
       clock,
       cognito: mockCognitoService,
+      sessionStore,
       tokenGenerator: mockTokenGenerator,
       triggers: mockTriggers,
     });
@@ -335,6 +353,213 @@ describe("RespondToAuthChallenge target", () => {
           },
         );
       });
+    });
+  });
+
+  describe("ChallengeName=CUSTOM_CHALLENGE", () => {
+    const user = TDB.user();
+    const lambdaConfig = {
+      CreateAuthChallenge: "create",
+      DefineAuthChallenge: "define",
+      VerifyAuthChallengeResponse: "verify",
+    } as const;
+
+    beforeEach(() => {
+      mockUserPoolService.options.LambdaConfig = lambdaConfig;
+      mockUserPoolService.getUserByUsername.mockResolvedValue(user);
+      mockUserPoolService.listUserGroupMembership.mockResolvedValue([]);
+      mockTokenGenerator.generate.mockResolvedValue({
+        AccessToken: "access",
+        IdToken: "id",
+        RefreshToken: "refresh",
+      });
+      mockTriggers.enabled.mockImplementation(
+        (trigger, poolLambdaConfig) => !!poolLambdaConfig?.[trigger],
+      );
+    });
+
+    const createSessionWithChallenge = () => {
+      const session = sessionStore.createSession({
+        clientId: userPoolClient.ClientId,
+        userPoolId: userPoolClient.UserPoolId,
+        username: user.Username,
+      });
+
+      sessionStore.setChallenge(session.id, {
+        challengeName: "CUSTOM_CHALLENGE",
+        challengeMetadata: "metadata",
+        expectedAnswer: "123456",
+        privateChallengeParameters: { expectedAnswer: "123456" },
+        publicChallengeParameters: {},
+      });
+
+      return session;
+    };
+
+    it("completes custom auth when triggers are configured on the pool", async () => {
+      mockTriggers.verifyAuthChallengeResponse.mockResolvedValueOnce({
+        answerCorrect: true,
+      });
+      mockTriggers.defineAuthChallenge.mockResolvedValueOnce({
+        challengeName: null,
+        failAuthentication: false,
+        issueTokens: true,
+      });
+
+      const session = createSessionWithChallenge();
+
+      const output = await respondToAuthChallenge(TestContext, {
+        ChallengeName: "CUSTOM_CHALLENGE",
+        ChallengeResponses: {
+          ANSWER: "123456",
+          USERNAME: user.Username,
+        },
+        ClientId: userPoolClient.ClientId,
+        Session: encodeSessionToken(session.id),
+      });
+
+      expect(output.AuthenticationResult?.AccessToken).toEqual("access");
+      expect(mockTriggers.verifyAuthChallengeResponse).toHaveBeenCalled();
+      expect(mockTriggers.defineAuthChallenge).toHaveBeenCalled();
+    });
+
+    it("fails authentication when the OTP is wrong", async () => {
+      mockTriggers.verifyAuthChallengeResponse.mockResolvedValueOnce({
+        answerCorrect: false,
+      });
+      mockTriggers.defineAuthChallenge.mockResolvedValueOnce({
+        challengeName: null,
+        failAuthentication: true,
+        issueTokens: false,
+      });
+
+      const session = createSessionWithChallenge();
+
+      await expect(
+        respondToAuthChallenge(TestContext, {
+          ChallengeName: "CUSTOM_CHALLENGE",
+          ChallengeResponses: {
+            ANSWER: "000000",
+            USERNAME: user.Username,
+          },
+          ClientId: userPoolClient.ClientId,
+          Session: encodeSessionToken(session.id),
+        }),
+      ).rejects.toBeInstanceOf(NotAuthorizedError);
+    });
+
+    it("rejects custom auth when triggers are missing", async () => {
+      mockUserPoolService.options.LambdaConfig = {};
+      mockTriggers.enabled.mockReturnValue(false);
+
+      const session = createSessionWithChallenge();
+
+      await expect(
+        respondToAuthChallenge(TestContext, {
+          ChallengeName: "CUSTOM_CHALLENGE",
+          ChallengeResponses: {
+            ANSWER: "123456",
+            USERNAME: user.Username,
+          },
+          ClientId: userPoolClient.ClientId,
+          Session: encodeSessionToken(session.id),
+        }),
+      ).rejects.toEqual(
+        new UnsupportedError("CUSTOM_AUTH triggers not configured"),
+      );
+    });
+
+    it("invokes custom auth lambdas using normalized function names", async () => {
+      const lambdaConfigWithArns = {
+        DefineAuthChallenge:
+          "arn:aws:lambda:us-east-1:000000000000:function:define-auth",
+        CreateAuthChallenge:
+          "arn:aws:lambda:us-east-1:000000000000:function:create-auth",
+        VerifyAuthChallengeResponse:
+          "arn:aws:lambda:us-east-1:000000000000:function:verify-auth",
+      } as const;
+
+      mockUserPoolService.options.LambdaConfig = lambdaConfigWithArns;
+      mockUserPoolService.listUserGroupMembership.mockResolvedValue([]);
+      mockTokenGenerator.generate.mockResolvedValue({
+        AccessToken: "access",
+        IdToken: "id",
+        RefreshToken: "refresh",
+      });
+
+      const mockLambdaClient = {
+        invoke: vi.fn(({ FunctionName }) => {
+          const payload =
+            FunctionName === "verify-auth"
+              ? { response: { answerCorrect: true } }
+              : {
+                  response: {
+                    challengeName: null,
+                    failAuthentication: false,
+                    issueTokens: true,
+                  },
+                };
+
+          return {
+            promise: () =>
+              Promise.resolve({
+                StatusCode: 200,
+                Payload: JSON.stringify(payload),
+              }),
+          };
+        }),
+      } as any;
+
+      const cognitoService = newMockCognitoService(mockUserPoolService);
+      cognitoService.getAppClient.mockResolvedValue(userPoolClient);
+      mockUserPoolService.getUserByUsername.mockResolvedValue(user);
+
+      const triggers = new TriggersService(
+        clock,
+        cognitoService,
+        new LambdaService({}, mockLambdaClient),
+        {} as unknown as CryptoService,
+      );
+
+      respondToAuthChallenge = RespondToAuthChallenge({
+        clock,
+        cognito: cognitoService,
+        sessionStore,
+        tokenGenerator: mockTokenGenerator,
+        triggers,
+      });
+
+      const session = sessionStore.createSession({
+        clientId: userPoolClient.ClientId,
+        userPoolId: userPoolClient.UserPoolId,
+        username: user.Username,
+      });
+
+      sessionStore.setChallenge(session.id, {
+        challengeName: "CUSTOM_CHALLENGE",
+        challengeMetadata: "metadata",
+        expectedAnswer: "123456",
+        privateChallengeParameters: { expectedAnswer: "123456" },
+        publicChallengeParameters: {},
+      });
+
+      const response = await respondToAuthChallenge(TestContext, {
+        ChallengeName: "CUSTOM_CHALLENGE",
+        ChallengeResponses: {
+          ANSWER: "123456",
+          USERNAME: user.Username,
+        },
+        ClientId: userPoolClient.ClientId,
+        Session: encodeSessionToken(session.id),
+      });
+
+      expect(mockLambdaClient.invoke).toHaveBeenCalledWith(
+        expect.objectContaining({ FunctionName: "verify-auth" }),
+      );
+      expect(mockLambdaClient.invoke).toHaveBeenCalledWith(
+        expect.objectContaining({ FunctionName: "define-auth" }),
+      );
+      expect(response.AuthenticationResult?.AccessToken).toEqual("access");
     });
   });
 });

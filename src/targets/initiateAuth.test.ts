@@ -1,4 +1,5 @@
 import {
+  afterEach,
   beforeEach,
   describe,
   expect,
@@ -7,6 +8,7 @@ import {
   type MockedObject,
   vi,
 } from "vitest";
+import { ClockFake } from "../__tests__/clockFake";
 import { newMockCognitoService } from "../__tests__/mockCognitoService";
 import { newMockMessages } from "../__tests__/mockMessages";
 import { newMockTokenGenerator } from "../__tests__/mockTokenGenerator";
@@ -22,7 +24,12 @@ import {
   PasswordResetRequiredError,
 } from "../errors";
 import type { Messages, Triggers, UserPoolService } from "../services";
+import { encodeConfirmSignUpSession } from "../services/confirmSignUpSession";
+import type { CryptoService } from "../services/crypto";
+import { LambdaService } from "../services/lambda";
+import { InMemorySessionStore } from "../services/sessionStore";
 import type { TokenGenerator } from "../services/tokenGenerator";
+import { TriggersService } from "../services/triggers";
 import { attributesToRecord, type User } from "../services/userPoolService";
 import { InitiateAuth, type InitiateAuthTarget } from "./initiateAuth";
 
@@ -33,6 +40,7 @@ describe("InitiateAuth target", () => {
   let mockOtp: Mock<() => string>;
   let mockTriggers: MockedObject<Triggers>;
   let mockTokenGenerator: MockedObject<TokenGenerator>;
+  let sessionStore: InMemorySessionStore;
   const userPoolClient = TDB.appClient();
 
   beforeEach(() => {
@@ -43,6 +51,7 @@ describe("InitiateAuth target", () => {
     mockOtp = vi.fn().mockReturnValue("123456");
     mockTriggers = newMockTriggers();
     mockTokenGenerator = newMockTokenGenerator();
+    sessionStore = new InMemorySessionStore();
 
     const mockCognitoService = newMockCognitoService(mockUserPoolService);
     mockCognitoService.getAppClient.mockResolvedValue(userPoolClient);
@@ -51,6 +60,7 @@ describe("InitiateAuth target", () => {
       cognito: mockCognitoService,
       messages: mockMessages,
       otp: mockOtp,
+      sessionStore,
       triggers: mockTriggers,
       tokenGenerator: mockTokenGenerator,
     });
@@ -102,6 +112,43 @@ describe("InitiateAuth target", () => {
           },
         }),
       ).rejects.toBeInstanceOf(PasswordResetRequiredError);
+    });
+
+    it("does not change USER_PASSWORD_AUTH alias handling", async () => {
+      const emailAlias = "alias@example.com";
+      const user = TDB.user({
+        Attributes: [
+          { Name: "email", Value: emailAlias },
+          { Name: "sub", Value: "sub" },
+        ],
+        Password: "Password123!",
+        Username: "canonical-username",
+      });
+
+      mockUserPoolService.options.UsernameAttributes = ["email"];
+      mockUserPoolService.getUserByUsername.mockResolvedValue(user);
+      mockUserPoolService.listUserGroupMembership.mockResolvedValue([]);
+      mockTokenGenerator.generate.mockResolvedValue({
+        AccessToken: "access",
+        IdToken: "id",
+        RefreshToken: "refresh",
+      });
+
+      const response = await initiateAuth(TestContext, {
+        ClientId: userPoolClient.ClientId,
+        AuthFlow: "USER_PASSWORD_AUTH",
+        AuthParameters: {
+          USERNAME: emailAlias,
+          PASSWORD: user.Password!,
+        },
+      });
+
+      expect(response.AuthenticationResult?.AccessToken).toEqual("access");
+      expect(mockUserPoolService.listUsers).not.toHaveBeenCalled();
+      expect(mockUserPoolService.getUserByUsername).toHaveBeenCalledWith(
+        TestContext,
+        emailAlias,
+      );
     });
 
     describe("when user doesn't exist", () => {
@@ -583,6 +630,219 @@ describe("InitiateAuth target", () => {
         undefined,
         "RefreshTokens",
       );
+    });
+  });
+
+  describe("CUSTOM_AUTH trigger configuration", () => {
+    it("uses LambdaConfig ARNs and normalizes function names", async () => {
+      const lambdaConfig = {
+        DefineAuthChallenge:
+          "arn:aws:lambda:us-east-1:000000000000:function:define-auth",
+        CreateAuthChallenge:
+          "arn:aws:lambda:us-east-1:000000000000:function:create-auth",
+        VerifyAuthChallengeResponse:
+          "arn:aws:lambda:us-east-1:000000000000:function:verify-auth",
+      } as const;
+      const userEmail = "alias@example.com";
+      const user = TDB.user({
+        Attributes: [
+          { Name: "email", Value: userEmail },
+          { Name: "sub", Value: "sub" },
+        ],
+        Username: "user-id",
+      });
+
+      mockUserPoolService.options.UsernameAttributes = ["email"];
+      mockUserPoolService.options.LambdaConfig = lambdaConfig;
+      mockUserPoolService.getUserByUsername.mockResolvedValue(user);
+      mockUserPoolService.listUsers.mockResolvedValue([user]);
+
+      const mockLambdaClient = {
+        invoke: vi.fn(({ FunctionName }) => {
+          const payload =
+            FunctionName === "define-auth"
+              ? {
+                  response: {
+                    challengeName: "CUSTOM_CHALLENGE",
+                    failAuthentication: false,
+                    issueTokens: false,
+                  },
+                }
+              : {
+                  response: {
+                    privateChallengeParameters: { expectedAnswer: "123456" },
+                    publicChallengeParameters: { question: "otp" },
+                  },
+                };
+
+          return {
+            promise: () =>
+              Promise.resolve({
+                StatusCode: 200,
+                Payload: JSON.stringify(payload),
+              }),
+          };
+        }),
+      } as any;
+
+      const cognitoService = newMockCognitoService(mockUserPoolService);
+      cognitoService.getAppClient.mockResolvedValue(userPoolClient);
+
+      const triggers = new TriggersService(
+        new ClockFake(),
+        cognitoService,
+        new LambdaService({}, mockLambdaClient),
+        {} as unknown as CryptoService,
+      );
+
+      initiateAuth = InitiateAuth({
+        cognito: cognitoService,
+        messages: mockMessages,
+        otp: mockOtp,
+        sessionStore,
+        triggers,
+        tokenGenerator: mockTokenGenerator,
+      });
+
+      const response = await initiateAuth(TestContext, {
+        AuthFlow: "CUSTOM_AUTH",
+        ClientId: userPoolClient.ClientId,
+        AuthParameters: {
+          USERNAME: userEmail,
+        },
+      });
+
+      expect(triggers.enabled("DefineAuthChallenge", lambdaConfig)).toBe(true);
+      expect(triggers.enabled("CreateAuthChallenge", lambdaConfig)).toBe(true);
+      expect(
+        triggers.enabled("VerifyAuthChallengeResponse", lambdaConfig),
+      ).toBe(true);
+
+      expect(mockLambdaClient.invoke).toHaveBeenCalledWith(
+        expect.objectContaining({ FunctionName: "define-auth" }),
+      );
+      expect(mockLambdaClient.invoke).toHaveBeenCalledWith(
+        expect.objectContaining({ FunctionName: "create-auth" }),
+      );
+      expect(response.ChallengeName).toEqual("CUSTOM_CHALLENGE");
+    });
+  });
+
+  describe("USER_AUTH auth flow", () => {
+    afterEach(() => {
+      delete process.env.COGNITO_LOCAL_ENABLE_USER_AUTH_CONFIRM_SESSION;
+    });
+
+    it("returns SELECT_CHALLENGE by default even with a confirm session", async () => {
+      const user = TDB.user();
+      mockUserPoolService.getUserByUsername.mockResolvedValue(user);
+
+      const session = encodeConfirmSignUpSession({
+        clientId: userPoolClient.ClientId,
+        userPoolId: userPoolClient.UserPoolId,
+        username: user.Username,
+      });
+
+      const response = await initiateAuth(TestContext, {
+        AuthFlow: "USER_AUTH",
+        AuthParameters: {
+          USERNAME: user.Username,
+        },
+        ClientId: userPoolClient.ClientId,
+        Session: session,
+      });
+
+      expect(response.ChallengeName).toEqual("SELECT_CHALLENGE");
+      expect(response.AuthenticationResult).toBeUndefined();
+    });
+
+    it("short-circuits to password auth when the flag is enabled", async () => {
+      process.env.COGNITO_LOCAL_ENABLE_USER_AUTH_CONFIRM_SESSION = "true";
+
+      const user = TDB.user();
+      mockUserPoolService.getUserByUsername.mockResolvedValue(user);
+      mockUserPoolService.listUserGroupMembership.mockResolvedValue([]);
+      mockTokenGenerator.generate.mockResolvedValue({
+        AccessToken: "access",
+        IdToken: "id",
+        RefreshToken: "refresh",
+      });
+
+      const session = encodeConfirmSignUpSession({
+        clientId: userPoolClient.ClientId,
+        userPoolId: userPoolClient.UserPoolId,
+        username: user.Username,
+      });
+
+      const response = await initiateAuth(TestContext, {
+        AuthFlow: "USER_AUTH",
+        AuthParameters: {
+          USERNAME: user.Username,
+        },
+        ClientId: userPoolClient.ClientId,
+        Session: session,
+      });
+
+      expect(response.AuthenticationResult?.AccessToken).toEqual("access");
+    });
+
+    it("still returns SELECT_CHALLENGE when the flag is enabled but no session is provided", async () => {
+      process.env.COGNITO_LOCAL_ENABLE_USER_AUTH_CONFIRM_SESSION = "true";
+
+      const response = await initiateAuth(TestContext, {
+        AuthFlow: "USER_AUTH",
+        AuthParameters: {
+          USERNAME: "user", // USERNAME is still required by the flow
+          PASSWORD: "Password123!",
+        },
+        ClientId: userPoolClient.ClientId,
+      });
+
+      expect(response.ChallengeName).toEqual("SELECT_CHALLENGE");
+      expect(response.AuthenticationResult).toBeUndefined();
+    });
+
+    it("returns SELECT_CHALLENGE when the provided session is not from ConfirmSignUp", async () => {
+      process.env.COGNITO_LOCAL_ENABLE_USER_AUTH_CONFIRM_SESSION = "true";
+
+      const response = await initiateAuth(TestContext, {
+        AuthFlow: "USER_AUTH",
+        AuthParameters: {
+          USERNAME: "user",
+          PASSWORD: "Password123!",
+        },
+        ClientId: userPoolClient.ClientId,
+        Session: Buffer.from("not-a-confirm-session", "utf-8").toString(
+          "base64",
+        ),
+      });
+
+      expect(response.ChallengeName).toEqual("SELECT_CHALLENGE");
+      expect(response.AuthenticationResult).toBeUndefined();
+    });
+
+    it("does not affect other flows", async () => {
+      process.env.COGNITO_LOCAL_ENABLE_USER_AUTH_CONFIRM_SESSION = "true";
+
+      const user = TDB.user();
+      mockUserPoolService.getUserByUsername.mockResolvedValue(user);
+      mockUserPoolService.listUserGroupMembership.mockResolvedValue([]);
+      mockTokenGenerator.generate.mockResolvedValue({
+        AccessToken: "access",
+        IdToken: "id",
+        RefreshToken: "refresh",
+      });
+
+      const response = await initiateAuth(TestContext, {
+        AuthFlow: "USER_PASSWORD_AUTH",
+        AuthParameters: {
+          USERNAME: user.Username,
+          PASSWORD: user.Password!,
+        },
+        ClientId: userPoolClient.ClientId,
+      });
+
+      expect(response.AuthenticationResult?.AccessToken).toEqual("access");
     });
   });
 });

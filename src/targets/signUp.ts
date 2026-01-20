@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type {
   SignUpRequest,
   SignUpResponse,
@@ -13,6 +14,7 @@ import {
   attribute,
   attributesAppend,
   attributesInclude,
+  attributeValue,
   type User,
 } from "../services/userPoolService";
 import type { Target } from "./Target";
@@ -72,13 +74,66 @@ export const SignUp =
     config,
   }: SignUpServices): SignUpTarget =>
   async (ctx, req) => {
+    const isLocal = process.env.COGNITO_LOCAL === "true";
     // TODO: This should behave differently depending on if PreventUserExistenceErrors
     // is enabled on the updatedUser pool. This will be the default after Feb 2020.
     // See: https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pool-managing-errors.html
     const userPool = await cognito.getUserPoolForClientId(ctx, req.ClientId);
     const existingUser = await userPool.getUserByUsername(ctx, req.Username);
-    if (existingUser) {
+
+    if (isLocal && existingUser) {
+      return {
+        CodeDeliveryDetails: undefined,
+        UserConfirmed: existingUser.UserStatus === "CONFIRMED",
+        UserSub:
+          attributeValue("sub", existingUser.Attributes) ??
+          existingUser.Username,
+      };
+    }
+
+    if (!isLocal && existingUser) {
       throw new UsernameExistsError();
+    }
+
+    if (isLocal) {
+      const sub = randomUUID();
+      const attributes = [
+        { Name: "sub", Value: sub },
+        ...(req.UserAttributes ?? []),
+      ];
+
+      let username = req.Username;
+      if (userPool.options.UsernameAttributes?.includes("email")) {
+        if (!req.Username.includes("@")) {
+          throw new InvalidParameterError("Username should be an email.");
+        }
+
+        if (!attributesInclude("email", attributes)) {
+          attributes.push({ Name: "email", Value: req.Username });
+        }
+
+        username = sub;
+      }
+
+      const now = clock.get();
+
+      await userPool.saveUser(ctx, {
+        Attributes: attributes,
+        ConfirmationCode: "000000",
+        Enabled: true,
+        Password: req.Password,
+        RefreshTokens: [],
+        UserCreateDate: now,
+        UserLastModifiedDate: now,
+        Username: username,
+        UserStatus: "UNCONFIRMED",
+      });
+
+      return {
+        CodeDeliveryDetails: undefined,
+        UserConfirmed: false,
+        UserSub: sub,
+      };
     }
 
     const sub = uuid.v4();
@@ -105,11 +160,12 @@ export const SignUp =
       username = sub;
     }
 
-    if (triggers.enabled("PreSignUp")) {
+    if (triggers.enabled("PreSignUp", userPool.options.LambdaConfig)) {
       const { autoConfirmUser, autoVerifyEmail, autoVerifyPhone } =
         await triggers.preSignUp(ctx, {
           clientId: req.ClientId,
           clientMetadata: req.ClientMetadata,
+          lambdaConfig: userPool.options.LambdaConfig,
           source: "PreSignUp_SignUp",
           userAttributes: attributes,
           username,
@@ -167,11 +223,12 @@ export const SignUp =
 
     if (
       updatedUser.UserStatus === "CONFIRMED" &&
-      triggers.enabled("PostConfirmation")
+      triggers.enabled("PostConfirmation", userPool.options.LambdaConfig)
     ) {
       await triggers.postConfirmation(ctx, {
         clientId: req.ClientId,
         clientMetadata: req.ClientMetadata,
+        lambdaConfig: userPool.options.LambdaConfig,
         source: "PostConfirmation_ConfirmSignUp",
         username,
         userPoolId: userPool.options.Id,

@@ -234,6 +234,79 @@ describe("JwtTokenGenerator", () => {
     });
   });
 
+  describe("custom attributes", () => {
+    beforeEach(() => {
+      mockTriggers.enabled.mockReturnValue(false);
+    });
+
+    it("includes custom attributes in the id token", async () => {
+      const userWithCustomAttribute = TDB.user({
+        Attributes: [
+          { Name: "email", Value: "user@example.com" },
+          { Name: "sub", Value: "00000000-0000-0000-0000-000000000000" },
+          { Name: "custom:organisationCode", Value: "LOCAL" },
+        ],
+      });
+
+      const tokens = await tokenGenerator.generate(
+        TestContext,
+        userWithCustomAttribute,
+        [],
+        TDB.appClient(),
+        { client: "metadata" },
+        "RefreshTokens",
+      );
+
+      const payload = jwt.decode(tokens.IdToken) as Record<string, unknown>;
+      expect(payload).not.toBeNull();
+      expect(payload).toMatchObject({
+        "custom:organisationCode": "LOCAL",
+      });
+    });
+
+    it("does not add claims when there are no custom attributes", async () => {
+      const tokens = await tokenGenerator.generate(
+        TestContext,
+        user,
+        [],
+        TDB.appClient(),
+        { client: "metadata" },
+        "RefreshTokens",
+      );
+
+      const payload = jwt.decode(tokens.IdToken) as Record<string, unknown>;
+      expect(payload).not.toBeNull();
+      expect(payload["custom:organisationCode"]).toBeUndefined();
+    });
+
+    it("includes multiple custom attributes", async () => {
+      const userWithMultipleCustomAttributes = TDB.user({
+        Attributes: [
+          { Name: "email", Value: "user@example.com" },
+          { Name: "sub", Value: "00000000-0000-0000-0000-000000000000" },
+          { Name: "custom:organisationCode", Value: "LOCAL" },
+          { Name: "custom:role", Value: "admin" },
+        ],
+      });
+
+      const tokens = await tokenGenerator.generate(
+        TestContext,
+        userWithMultipleCustomAttributes,
+        [],
+        TDB.appClient(),
+        { client: "metadata" },
+        "RefreshTokens",
+      );
+
+      const payload = jwt.decode(tokens.IdToken) as Record<string, unknown>;
+      expect(payload).not.toBeNull();
+      expect(payload).toMatchObject({
+        "custom:organisationCode": "LOCAL",
+        "custom:role": "admin",
+      });
+    });
+  });
+
   describe("expiration configuration", () => {
     describe("no token validity configured", () => {
       it("generates default expiration times", async () => {

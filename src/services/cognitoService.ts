@@ -374,21 +374,40 @@ export class CognitoServiceImpl implements CognitoService {
       throw new NotInitializedError();
     }
 
-    const appClient = await this.getAppClient(ctx, clientId);
-    if (!appClient) {
-      throw new ResourceNotFoundError(`App Client ${clientId} not found`);
-    }
+    try {
+      const appClient = await this.getAppClient(ctx, clientId);
+      if (!appClient) {
+        throw new ResourceNotFoundError(`App Client ${clientId} not found`);
+      }
 
-    const userPool = this.userPools.find(
-      (x) => x.options.Id === appClient.UserPoolId,
-    );
-    if (!userPool) {
-      throw new ResourceNotFoundError(
-        `User Pool ${appClient.UserPoolId} not found`,
+      const userPool = this.userPools.find(
+        (x) => x.options.Id === appClient.UserPoolId,
       );
-    }
+      if (!userPool) {
+        throw new ResourceNotFoundError(
+          `User Pool ${appClient.UserPoolId} not found`,
+        );
+      }
 
-    return userPool;
+      return userPool;
+    } catch (error) {
+      if (process.env.COGNITO_LOCAL === "true") {
+        const fallbackPool = this.userPools?.[0];
+        if (fallbackPool) {
+          ctx.logger.info(
+            {
+              clientId,
+              userPoolId: fallbackPool.options.Id,
+            },
+            `LOCAL MODE: ClientId "${clientId}" not found, falling back to "${fallbackPool.options.Id}"`,
+          );
+
+          return fallbackPool;
+        }
+      }
+
+      throw error;
+    }
   }
 
   public async getAppClient(

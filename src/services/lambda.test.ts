@@ -41,6 +41,14 @@ describe("Lambda function invoker", () => {
 
       expect(lambda.enabled("UserMigration")).toBe(false);
     });
+
+    it("uses lambdaConfig overrides when provided", () => {
+      const lambda = new LambdaService({}, mockLambdaClient);
+
+      expect(
+        lambda.enabled("UserMigration", { UserMigration: "PoolFunction" }),
+      ).toBe(true);
+    });
   });
 
   describe("invoke", () => {
@@ -62,6 +70,113 @@ describe("Lambda function invoker", () => {
     });
 
     describe("when lambda is successful", () => {
+      it("uses lambda configuration passed at invocation time", async () => {
+        const response = Promise.resolve({
+          StatusCode: 200,
+          Payload: '{ "response": { "ok": "value" } }',
+        });
+        mockLambdaClient.invoke.mockReturnValue({
+          promise: () => response,
+        } as any);
+        const lambda = new LambdaService(
+          {
+            UserMigration: "FallbackLambdaName",
+          },
+          mockLambdaClient,
+        );
+
+        await lambda.invoke(
+          TestContext,
+          "UserMigration",
+          {
+            clientId: "clientId",
+            clientMetadata: undefined,
+            password: "password",
+            triggerSource: "UserMigration_Authentication",
+            userAttributes: {},
+            username: "username",
+            userPoolId: "userPoolId",
+            validationData: undefined,
+          },
+          { UserMigration: "PoolLambdaName" },
+        );
+
+        expect(mockLambdaClient.invoke).toHaveBeenCalledWith({
+          FunctionName: "PoolLambdaName",
+          InvocationType: "RequestResponse",
+          Payload: expect.any(String),
+        });
+      });
+
+      it("supports camelCase lambda configuration keys", async () => {
+        const response = Promise.resolve({
+          StatusCode: 200,
+          Payload: '{ "response": { "ok": "value" } }',
+        });
+        mockLambdaClient.invoke.mockReturnValue({
+          promise: () => response,
+        } as any);
+        const lambda = new LambdaService({}, mockLambdaClient);
+
+        await lambda.invoke(
+          TestContext,
+          "DefineAuthChallenge",
+          {
+            clientId: "clientId",
+            clientMetadata: undefined,
+            session: [],
+            triggerSource: "DefineAuthChallenge_Authentication",
+            userAttributes: {},
+            username: "username",
+            userPoolId: "userPoolId",
+          },
+          {
+            defineAuthChallenge:
+              "arn:aws:lambda:us-east-1:000000000000:function:define-auth",
+          } as any,
+        );
+
+        expect(mockLambdaClient.invoke).toHaveBeenCalledWith({
+          FunctionName: "define-auth",
+          InvocationType: "RequestResponse",
+          Payload: expect.any(String),
+        });
+      });
+
+      it("normalises full ARN function names including aliases", async () => {
+        const response = Promise.resolve({
+          StatusCode: 200,
+          Payload: '{ "response": { "ok": "value" } }',
+        });
+        mockLambdaClient.invoke.mockReturnValue({
+          promise: () => response,
+        } as any);
+        const lambda = new LambdaService(
+          {
+            UserMigration:
+              "arn:aws:lambda:us-east-1:000000000000:function:define-auth:prod",
+          },
+          mockLambdaClient,
+        );
+
+        await lambda.invoke(TestContext, "UserMigration", {
+          clientId: "clientId",
+          clientMetadata: undefined,
+          password: "password",
+          triggerSource: "UserMigration_Authentication",
+          userAttributes: {},
+          username: "username",
+          userPoolId: "userPoolId",
+          validationData: undefined,
+        });
+
+        expect(mockLambdaClient.invoke).toHaveBeenCalledWith({
+          FunctionName: "define-auth",
+          InvocationType: "RequestResponse",
+          Payload: expect.any(String),
+        });
+      });
+
       it("returns string payload as json", async () => {
         const response = Promise.resolve({
           StatusCode: 200,

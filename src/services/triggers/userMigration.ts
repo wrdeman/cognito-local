@@ -3,7 +3,11 @@ import * as uuid from "uuid";
 import { NotAuthorizedError, ResourceNotFoundError } from "../../errors";
 import type { Clock } from "../clock";
 import type { CognitoService } from "../cognitoService";
-import type { Lambda, UserMigrationTriggerResponse } from "../lambda";
+import type {
+  FunctionConfig,
+  Lambda,
+  UserMigrationTriggerResponse,
+} from "../lambda";
 import {
   attributesFromRecord,
   attributesToRecord,
@@ -35,6 +39,7 @@ export type UserMigrationTrigger = Trigger<
      * Source: https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-lambda-migrate-user.html#cognito-user-pools-lambda-trigger-syntax-user-migration
      */
     validationData: Record<string, string> | undefined;
+    lambdaConfig?: FunctionConfig;
   },
   User
 >;
@@ -56,6 +61,7 @@ export const UserMigration =
     {
       clientId,
       clientMetadata,
+      lambdaConfig,
       password,
       userAttributes,
       username,
@@ -71,16 +77,21 @@ export const UserMigration =
     let result: UserMigrationTriggerResponse;
 
     try {
-      result = await lambda.invoke(ctx, "UserMigration", {
-        clientId,
-        clientMetadata,
-        password,
-        triggerSource: "UserMigration_Authentication",
-        userAttributes: attributesToRecord(userAttributes),
-        username,
-        userPoolId,
-        validationData,
-      });
+      result = await lambda.invoke(
+        ctx,
+        "UserMigration",
+        {
+          clientId,
+          clientMetadata,
+          password,
+          triggerSource: "UserMigration_Authentication",
+          userAttributes: attributesToRecord(userAttributes),
+          username,
+          userPoolId,
+          validationData,
+        },
+        lambdaConfig,
+      );
     } catch (_ex) {
       throw new NotAuthorizedError();
     }

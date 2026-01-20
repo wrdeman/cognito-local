@@ -8,6 +8,7 @@ import {
   NotAuthorizedError,
 } from "../errors";
 import type { Services } from "../services";
+import { encodeConfirmSignUpSession } from "../services/confirmSignUpSession";
 import { attribute, attributesAppend } from "../services/userPoolService";
 import type { Target } from "./Target";
 
@@ -23,18 +24,21 @@ export const ConfirmSignUp =
     triggers,
   }: Pick<Services, "cognito" | "clock" | "triggers">): ConfirmSignUpTarget =>
   async (ctx, req) => {
+    const isLocal = process.env.COGNITO_LOCAL === "true";
     const userPool = await cognito.getUserPoolForClientId(ctx, req.ClientId);
     const user = await userPool.getUserByUsername(ctx, req.Username);
     if (!user) {
       throw new NotAuthorizedError();
     }
 
-    if (!user.ConfirmationCode) {
-      throw new ExpiredCodeError();
-    }
+    if (!isLocal) {
+      if (!user.ConfirmationCode) {
+        throw new ExpiredCodeError();
+      }
 
-    if (user.ConfirmationCode !== req.ConfirmationCode) {
-      throw new CodeMismatchError();
+      if (user.ConfirmationCode !== req.ConfirmationCode) {
+        throw new CodeMismatchError();
+      }
     }
 
     const updatedUser = {
@@ -50,6 +54,7 @@ export const ConfirmSignUp =
       await triggers.postConfirmation(ctx, {
         clientId: req.ClientId,
         clientMetadata: req.ClientMetadata,
+        lambdaConfig: userPool.options.LambdaConfig,
         source: "PostConfirmation_ConfirmSignUp",
         username: updatedUser.Username,
         userPoolId: userPool.options.Id,
@@ -63,5 +68,14 @@ export const ConfirmSignUp =
       });
     }
 
-    return {};
+    return {
+      // AWS occasionally emits a Session value that can be reused when immediately
+      // initiating auth. We always emit one for consistency, even though the
+      // default cognito-local behaviour does not use it.
+      Session: encodeConfirmSignUpSession({
+        clientId: req.ClientId,
+        userPoolId: userPool.options.Id,
+        username: updatedUser.Username,
+      }),
+    };
   };

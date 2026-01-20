@@ -2,6 +2,7 @@ import * as AWS from "aws-sdk";
 import type pino from "pino";
 import {
   DateClock,
+  InMemorySessionStore,
   LambdaService,
   MessagesService,
   TriggersService,
@@ -68,6 +69,7 @@ export const createDefaultServer = async (
         new MessageDeliveryService(new ConsoleMessageSender()),
       ),
       otp,
+      sessionStore: new InMemorySessionStore(),
       tokenGenerator: new JwtTokenGenerator(
         clock,
         triggers,

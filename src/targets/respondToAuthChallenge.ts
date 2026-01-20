@@ -9,6 +9,13 @@ import {
   UnsupportedError,
 } from "../errors";
 import type { Services } from "../services";
+import type { AppClient } from "../services/appClient";
+import type { Context } from "../services/context";
+import {
+  decodeSessionToken,
+  encodeSessionToken,
+} from "../services/sessionStore";
+import type { User, UserPoolService } from "../services/userPoolService";
 import type { Target } from "./Target";
 
 export type RespondToAuthChallengeTarget = Target<
@@ -18,13 +25,178 @@ export type RespondToAuthChallengeTarget = Target<
 
 type RespondToAuthChallengeService = Pick<
   Services,
-  "clock" | "cognito" | "triggers" | "tokenGenerator"
+  "clock" | "cognito" | "sessionStore" | "triggers" | "tokenGenerator"
 >;
+
+const customAuthChallenge = async (
+  ctx: Context,
+  req: RespondToAuthChallengeRequest,
+  userPool: UserPoolService,
+  userPoolClient: AppClient,
+  user: User,
+  services: RespondToAuthChallengeService,
+): Promise<RespondToAuthChallengeResponse> => {
+  const defineEnabled = services.triggers.enabled(
+    "DefineAuthChallenge",
+    userPool.options.LambdaConfig,
+  );
+  const createEnabled = services.triggers.enabled(
+    "CreateAuthChallenge",
+    userPool.options.LambdaConfig,
+  );
+  const verifyEnabled = services.triggers.enabled(
+    "VerifyAuthChallengeResponse",
+    userPool.options.LambdaConfig,
+  );
+
+  ctx.logger.debug("CUSTOM_AUTH trigger enablement check", {
+    defineEnabled,
+    createEnabled,
+    verifyEnabled,
+    userPoolId: userPool.options.Id,
+    lambdaConfigKeys: Object.keys(userPool.options.LambdaConfig ?? {}),
+  });
+
+  if (!defineEnabled || !createEnabled || !verifyEnabled) {
+    throw new UnsupportedError("CUSTOM_AUTH triggers not configured");
+  }
+
+  const sessionId = decodeSessionToken(req.Session!);
+  const authSession = services.sessionStore.getSession(sessionId);
+
+  if (!authSession || authSession.username !== user.Username) {
+    throw new NotAuthorizedError();
+  }
+
+  if (!authSession.challenge) {
+    throw new NotAuthorizedError();
+  }
+
+  const challengeAnswer =
+    req.ChallengeResponses?.ANSWER ??
+    req.ChallengeResponses?.CHALLENGE_ANSWER ??
+    req.ChallengeResponses?.SMS_MFA_CODE;
+
+  if (challengeAnswer === undefined) {
+    throw new InvalidParameterError("Missing required parameter ANSWER");
+  }
+
+  const verifyResponse = await services.triggers.verifyAuthChallengeResponse(
+    ctx,
+    {
+      challengeAnswer,
+      clientId: req.ClientId,
+      clientMetadata: req.ClientMetadata,
+      lambdaConfig: userPool.options.LambdaConfig,
+      privateChallengeParameters:
+        authSession.challenge.privateChallengeParameters,
+      session: authSession.session,
+      userAttributes: user.Attributes,
+      username: user.Username,
+      userPoolId: userPool.options.Id,
+    },
+  );
+
+  const answerCorrect =
+    verifyResponse?.answerCorrect ??
+    (authSession.challenge.expectedAnswer !== null &&
+      challengeAnswer === authSession.challenge.expectedAnswer);
+
+  const sessionWithResult = services.sessionStore.recordChallengeResult(
+    sessionId,
+    answerCorrect,
+  );
+
+  const defineResponse = await services.triggers.defineAuthChallenge(ctx, {
+    clientId: req.ClientId,
+    clientMetadata: req.ClientMetadata,
+    lambdaConfig: userPool.options.LambdaConfig,
+    session: sessionWithResult.session,
+    userAttributes: user.Attributes,
+    username: user.Username,
+    userPoolId: userPool.options.Id,
+  });
+
+  if (defineResponse.failAuthentication) {
+    services.sessionStore.deleteSession(sessionId);
+    throw new NotAuthorizedError();
+  }
+
+  if (defineResponse.issueTokens) {
+    const userGroups = await userPool.listUserGroupMembership(ctx, user);
+    const tokens = await services.tokenGenerator.generate(
+      ctx,
+      user,
+      userGroups,
+      userPoolClient,
+      req.ClientMetadata,
+      "Authentication",
+    );
+
+    if (tokens.RefreshToken) {
+      await userPool.storeRefreshToken(ctx, tokens.RefreshToken, user);
+    }
+
+    if (
+      services.triggers.enabled(
+        "PostAuthentication",
+        userPool.options.LambdaConfig,
+      )
+    ) {
+      await services.triggers.postAuthentication(ctx, {
+        clientId: req.ClientId,
+        clientMetadata: req.ClientMetadata,
+        lambdaConfig: userPool.options.LambdaConfig,
+        source: "PostAuthentication_Authentication",
+        userAttributes: user.Attributes,
+        username: user.Username,
+        userPoolId: userPool.options.Id,
+      });
+    }
+
+    services.sessionStore.deleteSession(sessionId);
+
+    return {
+      ChallengeParameters: {},
+      AuthenticationResult: tokens,
+    };
+  }
+
+  const challengeName: "CUSTOM_CHALLENGE" = (defineResponse.challengeName ??
+    "CUSTOM_CHALLENGE") as "CUSTOM_CHALLENGE";
+
+  const createResponse = await services.triggers.createAuthChallenge(ctx, {
+    challengeName,
+    clientId: req.ClientId,
+    clientMetadata: req.ClientMetadata,
+    lambdaConfig: userPool.options.LambdaConfig,
+    session: sessionWithResult.session,
+    userAttributes: user.Attributes,
+    username: user.Username,
+    userPoolId: userPool.options.Id,
+  });
+
+  services.sessionStore.setChallenge(sessionId, {
+    challengeName,
+    privateChallengeParameters: createResponse.privateChallengeParameters ?? {},
+    publicChallengeParameters: createResponse.publicChallengeParameters ?? {},
+    expectedAnswer:
+      createResponse.privateChallengeParameters?.expectedAnswer ?? null,
+    challengeMetadata: createResponse.challengeMetadata || undefined,
+  });
+
+  return {
+    ChallengeName: "CUSTOM_CHALLENGE",
+    ChallengeParameters: createResponse.publicChallengeParameters ?? {},
+    Session: encodeSessionToken(sessionId),
+  };
+};
 
 export const RespondToAuthChallenge =
   ({
     clock,
     cognito,
+    sessionStore,
     triggers,
     tokenGenerator,
   }: RespondToAuthChallengeService): RespondToAuthChallengeTarget =>
@@ -52,7 +224,15 @@ export const RespondToAuthChallenge =
       throw new NotAuthorizedError();
     }
 
-    if (req.ChallengeName === "SMS_MFA") {
+    if (req.ChallengeName === "CUSTOM_CHALLENGE") {
+      return customAuthChallenge(ctx, req, userPool, userPoolClient, user, {
+        clock,
+        cognito,
+        sessionStore,
+        triggers,
+        tokenGenerator,
+      });
+    } else if (req.ChallengeName === "SMS_MFA") {
       if (user.MFACode !== req.ChallengeResponses.SMS_MFA_CODE) {
         throw new CodeMismatchError();
       }
