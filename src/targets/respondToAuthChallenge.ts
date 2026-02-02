@@ -61,7 +61,11 @@ const customAuthChallenge = async (
     throw new UnsupportedError("CUSTOM_AUTH triggers not configured");
   }
 
-  const sessionId = decodeSessionToken(req.Session!);
+  if (!req.Session) {
+    throw new InvalidParameterError("Missing required parameter Session");
+  }
+
+  const sessionId = decodeSessionToken(req.Session);
   const authSession = services.sessionStore.getSession(sessionId);
 
   if (!authSession || authSession.username !== user.Username) {

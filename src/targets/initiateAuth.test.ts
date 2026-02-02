@@ -689,7 +689,7 @@ describe("InitiateAuth target", () => {
       cognitoService.getAppClient.mockResolvedValue(userPoolClient);
 
       const triggers = new TriggersService(
-        new ClockFake(),
+        new ClockFake(new Date("2023-01-01T00:00:00.000Z")),
         cognitoService,
         new LambdaService({}, mockLambdaClient),
         {} as unknown as CryptoService,

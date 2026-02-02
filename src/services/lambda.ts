@@ -13,6 +13,11 @@ import type {
   VerifyAuthChallengeResponseTriggerEvent,
 } from "aws-lambda";
 import type { Lambda as LambdaClient } from "aws-sdk";
+import type {
+  CustomEmailLambdaVersionConfigType,
+  CustomSMSLambdaVersionConfigType,
+  LambdaConfigType,
+} from "aws-sdk/clients/cognitoidentityserviceprovider";
 import type { InvocationResponse } from "aws-sdk/clients/lambda";
 import { version as awsSdkVersion } from "aws-sdk/package.json";
 import {
@@ -178,18 +183,27 @@ interface VerifyAuthChallengeResponseEvent extends EventCommonParameters {
   triggerSource: "VerifyAuthChallengeResponse_Authentication";
 }
 
-export interface FunctionConfig {
-  CustomMessage?: string;
-  PostAuthentication?: string;
-  PostConfirmation?: string;
-  PreSignUp?: string;
-  PreTokenGeneration?: string;
-  UserMigration?: string;
-  CustomEmailSender?: string;
-  DefineAuthChallenge?: string;
-  CreateAuthChallenge?: string;
-  VerifyAuthChallengeResponse?: string;
-}
+export type FunctionConfig = Omit<
+  LambdaConfigType,
+  "CustomEmailSender" | "CustomSMSSender" | "KMSKeyID"
+> & {
+  CustomEmailSender?: string | CustomEmailLambdaVersionConfigType;
+  CustomSMSSender?: string | CustomSMSLambdaVersionConfigType;
+};
+
+const resolveLambdaIdentifier = (value: unknown): string | undefined => {
+  if (!value) {
+    return undefined;
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  if (typeof value === "object" && "LambdaArn" in value) {
+    const arn = (value as { LambdaArn?: string }).LambdaArn;
+    return typeof arn === "string" ? arn : undefined;
+  }
+  return undefined;
+};
 
 export type CustomMessageTriggerResponse =
   CustomMessageTriggerEvent["response"];
@@ -304,14 +318,14 @@ export class LambdaService implements Lambda {
     const configs: (FunctionConfig | undefined)[] = [lambdaConfig, this.config];
 
     for (const config of configs) {
-      const value =
-        (config as Record<string, string | undefined> | undefined)?.[trigger] ??
-        (config as Record<string, string | undefined> | undefined)?.[
+      const rawValue =
+        (config as Record<string, unknown> | undefined)?.[trigger] ??
+        (config as Record<string, unknown> | undefined)?.[
           normalizeTriggerKey(trigger)
         ];
-
-      if (value) {
-        return value;
+      const identifier = resolveLambdaIdentifier(rawValue);
+      if (identifier) {
+        return identifier;
       }
     }
 

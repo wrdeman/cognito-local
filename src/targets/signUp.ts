@@ -116,9 +116,13 @@ export const SignUp =
       }
 
       const now = clock.get();
+      const attributesWithEmailVerified = attributesAppend(
+        attributes,
+        attribute("email_verified", "true"),
+      );
 
       await userPool.saveUser(ctx, {
-        Attributes: attributes,
+        Attributes: attributesWithEmailVerified,
         ConfirmationCode: "000000",
         Enabled: true,
         Password: req.Password,
@@ -126,12 +130,12 @@ export const SignUp =
         UserCreateDate: now,
         UserLastModifiedDate: now,
         Username: username,
-        UserStatus: "UNCONFIRMED",
+        UserStatus: "CONFIRMED",
       });
 
       return {
         CodeDeliveryDetails: undefined,
-        UserConfirmed: false,
+        UserConfirmed: true,
         UserSub: sub,
       };
     }

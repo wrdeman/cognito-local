@@ -26,9 +26,16 @@ import {
 } from "../services/userPoolService";
 import type { Target } from "./Target";
 
+type InitiateAuthRequestWithSession = InitiateAuthRequest & {
+  Session?: string;
+};
+type InitiateAuthResponseWithAvailableChallenges = InitiateAuthResponse & {
+  AvailableChallenges?: string[];
+};
+
 export type InitiateAuthTarget = Target<
-  InitiateAuthRequest,
-  InitiateAuthResponse
+  InitiateAuthRequestWithSession,
+  InitiateAuthResponseWithAvailableChallenges
 >;
 
 type InitiateAuthServices = Pick<
@@ -44,10 +51,10 @@ type InitiateAuthServices = Pick<
 const verifyMfaChallenge = async (
   ctx: Context,
   user: User,
-  req: InitiateAuthRequest,
+  req: InitiateAuthRequestWithSession,
   userPool: UserPoolService,
   services: InitiateAuthServices,
-): Promise<InitiateAuthResponse> => {
+): Promise<InitiateAuthResponseWithAvailableChallenges> => {
   if (!user.MFAOptions?.length) {
     throw new NotAuthorizedError();
   }
@@ -101,11 +108,11 @@ const verifyMfaChallenge = async (
 const verifyPasswordChallenge = async (
   ctx: Context,
   user: User,
-  _req: InitiateAuthRequest,
+  _req: InitiateAuthRequestWithSession,
   userPool: UserPoolService,
   userPoolClient: AppClient,
   services: InitiateAuthServices,
-): Promise<InitiateAuthResponse> => {
+): Promise<InitiateAuthResponseWithAvailableChallenges> => {
   const userGroups = await userPool.listUserGroupMembership(ctx, user);
 
   const tokens = await services.tokenGenerator.generate(
@@ -155,7 +162,9 @@ const generateCustomAuthTokens = async (
   return tokens;
 };
 
-const newPasswordChallenge = (user: User): InitiateAuthResponse => ({
+const newPasswordChallenge = (
+  user: User,
+): InitiateAuthResponseWithAvailableChallenges => ({
   ChallengeName: "NEW_PASSWORD_REQUIRED",
   ChallengeParameters: {
     USER_ID_FOR_SRP: user.Username,
@@ -167,11 +176,11 @@ const newPasswordChallenge = (user: User): InitiateAuthResponse => ({
 
 const userPasswordAuthFlow = async (
   ctx: Context,
-  req: InitiateAuthRequest,
+  req: InitiateAuthRequestWithSession,
   userPool: UserPoolService,
   userPoolClient: AppClient,
   services: InitiateAuthServices,
-): Promise<InitiateAuthResponse> => {
+): Promise<InitiateAuthResponseWithAvailableChallenges> => {
   if (!req.AuthParameters) {
     throw new InvalidParameterError(
       "Missing required parameter authParameters",
@@ -261,14 +270,14 @@ const userPasswordAuthFlow = async (
 
 const userAuthFlow = async (
   ctx: Context,
-  req: InitiateAuthRequest,
+  req: InitiateAuthRequestWithSession,
   userPool: UserPoolService,
   userPoolClient: AppClient,
   services: InitiateAuthServices,
-): Promise<InitiateAuthResponse> => {
+): Promise<InitiateAuthResponseWithAvailableChallenges> => {
   ctx.logger.info("USER_AUTH received", {
-    hasSession: Boolean((req as any).Session),
-    session: (req as any).Session,
+    hasSession: Boolean(req.Session),
+    session: req.Session,
     authParamsKeys: Object.keys(req.AuthParameters ?? {}),
     clientId: req.ClientId,
     userPoolId: userPool.options.Id,
@@ -280,9 +289,10 @@ const userAuthFlow = async (
     resolvedUsername &&
     userPool.options.UsernameAttributes?.includes("email")
   ) {
+    const emailToMatch = resolvedUsername;
     const users = await userPool.listUsers(ctx);
     const byEmail = users.find((u) =>
-      attributesIncludeMatch("email", resolvedUsername!, u.Attributes),
+      attributesIncludeMatch("email", emailToMatch, u.Attributes),
     );
     if (byEmail) {
       resolvedUsername = byEmail.Username;
@@ -341,13 +351,17 @@ const userAuthFlow = async (
     );
   }
   ctx.logger.info("USER_AUTH returning SELECT_CHALLENGE", {
-    returningSession: (req as any).Session,
+    returningSession: req.Session,
   });
+
+  if (!req.AuthParameters?.USERNAME) {
+    throw new InvalidParameterError("AuthParameters USERNAME is required");
+  }
 
   const session = services.sessionStore.createSession({
     clientId: req.ClientId,
     userPoolId: userPool.options.Id,
-    username: req.AuthParameters?.USERNAME,
+    username: req.AuthParameters.USERNAME,
   });
 
   ctx.logger.info("USER_AUTH SELECT_CHALLENGE session created", {
@@ -357,20 +371,23 @@ const userAuthFlow = async (
   });
 
   return {
-    ChallengeName: "SELECT_CHALLENGE" as any,
+    ChallengeName: "SELECT_CHALLENGE" as InitiateAuthResponse["ChallengeName"],
     ChallengeParameters: {},
     Session: encodeSessionToken(session.id),
-    AvailableChallenges: ["PASSWORD", "PASSWORD_SRP"] as any,
+    AvailableChallenges: [
+      "PASSWORD",
+      "PASSWORD_SRP",
+    ] as InitiateAuthResponseWithAvailableChallenges["AvailableChallenges"],
   };
 };
 
 const customAuthFlow = async (
   ctx: Context,
-  req: InitiateAuthRequest,
+  req: InitiateAuthRequestWithSession,
   userPool: UserPoolService,
   userPoolClient: AppClient,
   services: InitiateAuthServices,
-): Promise<InitiateAuthResponse> => {
+): Promise<InitiateAuthResponseWithAvailableChallenges> => {
   if (!req.AuthParameters?.USERNAME) {
     throw new InvalidParameterError("AuthParameters USERNAME is required");
   }
@@ -656,11 +673,11 @@ const customAuthFlow = async (
 
 const refreshTokenAuthFlow = async (
   ctx: Context,
-  req: InitiateAuthRequest,
+  req: InitiateAuthRequestWithSession,
   userPool: UserPoolService,
   userPoolClient: AppClient,
   services: InitiateAuthServices,
-): Promise<InitiateAuthResponse> => {
+): Promise<InitiateAuthResponseWithAvailableChallenges> => {
   if (!req.AuthParameters) {
     throw new InvalidParameterError(
       "Missing required parameter authParameters",
