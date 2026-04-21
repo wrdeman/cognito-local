@@ -116,8 +116,6 @@ const verifyPasswordChallenge = async (
   await userPool.storeRefreshToken(ctx, tokens.RefreshToken, user);
 
   return {
-    ChallengeName: "PASSWORD_VERIFIER",
-    ChallengeParameters: {},
     AuthenticationResult: tokens,
   };
 };
